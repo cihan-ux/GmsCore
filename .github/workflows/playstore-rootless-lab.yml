@@ -1,0 +1,38 @@
+name: Play Store Rootless Installer Lab
+
+on:
+  push:
+    branches:
+      - playstore-rootless-installer-lab
+    paths:
+      - 'labs/playstore-rootless-installer/**'
+      - '.github/workflows/playstore-rootless-lab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Build debug lab APK
+        run: |
+          chmod +x gradlew
+          ./gradlew -p labs/playstore-rootless-installer :app:assembleDebug --no-daemon --max-workers=2
+      - name: Upload lab APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSmartS-Rootless-Installer-Lab
+          path: labs/playstore-rootless-installer/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7

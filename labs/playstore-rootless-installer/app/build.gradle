@@ -1,0 +1,16 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.psmarts.rootlesslab'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'org.psmarts.rootlesslab'
+        minSdk 29
+        targetSdk 29
+        versionCode 1
+        versionName '0.1-lab'
+    }
+}
