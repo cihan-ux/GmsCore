@@ -101,6 +101,15 @@ Ham stack trace, Google hesabı, token veya diğer uygulamalara ait
 crash verileri rapora eklenmez. Kapanma yerine yalnızca hata balonu
 oluşmuşsa crash sayısının sıfır olması normaldir.
 
+Yeni `PLAY STORE CRASH CAUSE INDICATORS` bölümü, her çökme için
+`ACCOUNT_PRIVATE_USERDATA_DENIED`, `PROTECTED_USER_MANAGEMENT_PERMISSION`,
+`OTHER_SECURITY_EXCEPTION` gibi sabit adlarla olası hata sınıfını
+özetler. `RuntimeException` altında `Caused by: SecurityException`
+bulunursa genel sınıf yerine daha belirli işaret raporlanabilir.
+Bu sezgisel eşleştirme **kesin neden kanıtı değildir**; eksik
+AndroidRuntime günlükleri veya farklı üretici uygulamaları eşleştirmeyi
+sınırlayabilir.
+
 **Önerilen yol:** Play Store'da daha önce yüklenmemiş ücretsiz bir
 uygulamayı indirmeyi denedikten hemen sonra `--focused` kullanın. Bu
 seçenek `Finsky`, `PackageInstaller` ve `PackageManager` log tag'lerini
