@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Read-only, privacy-limited diagnostics for GmsCore on Huawei / Android 10.
 
-Only a fixed allowlist of non-secret properties and package metadata is queried.
-Never runs root, package installation/removal, account dumps, or logcat.
+Only allowlisted properties and package metadata are shown by default.
+Optional --account-types reads dumpsys account in memory but prints only two known
+account type strings, never account names or passwords. Never uses root or logcat.
 """
 import argparse
 import re
@@ -29,6 +30,63 @@ PACKAGE_NAMES = (
 )
 
 MAX_VALUE_LENGTH = 150
+
+
+# Account type names, never account names, are included in opt-in reports.
+KNOWN_ACCOUNT_TYPES = ("com.google", "app.revanced")
+# Dumpsys lines can contain names/emails: only extract the account *type*.
+ACCOUNT_TYPE_RE = re.compile(r"Account\s*\{name=[^}]*?,\s*type=([A-Za-z0-9_.]+)\}")
+AUTHENTICATOR_TYPE_RE = re.compile(
+    r"AuthenticatorDescription\s*\{type=([A-Za-z0-9_.]+)(?:[,} ])"
+)
+PACKAGE_UID_RE = re.compile(r"^package:([A-Za-z0-9_.]+)\s+uid:(\d+)\s*$")
+
+
+def parse_known_account_types(raw):
+    """Discard all raw account records and return only allowlisted type names."""
+    accounts = set()
+    authenticators = set()
+    for line in raw.splitlines():
+        match = ACCOUNT_TYPE_RE.search(line)
+        if match and match.group(1) in KNOWN_ACCOUNT_TYPES:
+            accounts.add(match.group(1))
+        match = AUTHENTICATOR_TYPE_RE.search(line)
+        if match and match.group(1) in KNOWN_ACCOUNT_TYPES:
+            authenticators.add(match.group(1))
+    return accounts, authenticators
+
+
+def parse_known_package_uids(raw):
+    """Return UID metadata for the fixed package allowlist only."""
+    result = {}
+    for line in raw.splitlines():
+        match = PACKAGE_UID_RE.fullmatch(line.strip())
+        if match and match.group(1) in PACKAGE_NAMES:
+            result[match.group(1)] = match.group(2)
+    return result
+
+
+def build_account_type_report(accounts, authenticators):
+    """No email, account name, token, or raw dumpsys line is returned."""
+    lines = [
+        "",
+        "OPTIONAL ACCOUNT TYPE CHECK (dumpsys account; type names only)",
+        "Absence means not seen in output; it does not prove no account exists.",
+    ]
+    for name in KNOWN_ACCOUNT_TYPES:
+        lines.append(
+            f"{name}: authenticator={'REGISTERED' if name in authenticators else 'NOT SEEN'}"
+            f" | account={'PRESENT' if name in accounts else 'NOT SEEN'}"
+        )
+    lines.extend((
+        "",
+        "A registered authenticator does not mean an account exists.",
+        "Android getUserData requires caller authorization as account-type manager;",
+        "merely making an account visible or requesting GET_ACCOUNTS_PRIVILEGED",
+        "does not confer permission to read another authenticator's private user data.",
+        "The full dumpsys account output is processed in memory, not printed or saved.",
+    ))
+    return "\n".join(lines) + "\n"
 
 
 def parse_package_list(raw):
@@ -72,7 +130,7 @@ def adb(*args):
     return completed.stdout.strip()
 
 
-def build_report(properties, installed, versions):
+def build_report(properties, installed, versions, uids=None):
     lines = [
         "GmsCore-hw | Huawei read-only diagnostic report",
         "No account names, serial numbers, Android IDs, logs or tokens collected.",
@@ -87,7 +145,8 @@ def build_report(properties, installed, versions):
             lines.append(f"{name}: NOT INSTALLED / NOT VISIBLE")
         else:
             version, version_code = versions.get(name, ("unavailable", "unavailable"))
-            lines.append(f"{name}: INSTALLED | versionName={version} | versionCode={version_code}")
+            uid = (uids or {}).get(name, "unavailable")
+            lines.append(f"{name}: INSTALLED | uid={uid} | versionName={version} | versionCode={version_code}")
     lines.extend((
         "",
         "INTERPRETATION LIMITS",
@@ -104,6 +163,8 @@ def build_report(properties, installed, versions):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", metavar="PATH", help="Optional local text report (review before sharing)")
+    parser.add_argument("--account-types", action="store_true",
+                        help="Opt in: read dumpsys account; output only com.google/app.revanced type presence")
     args = parser.parse_args()
 
     try:
@@ -111,6 +172,11 @@ def main():
             raise RuntimeError("ADB cihazı hazır değil; bağlantıyı kontrol edin.")
         properties = {key: adb("shell", "getprop", key) for key in PROPERTY_KEYS}
         installed = parse_package_list(adb("shell", "pm", "list", "packages", "--user", "0"))
+        uids = parse_known_package_uids(adb("shell", "pm", "list", "packages", "-U", "--user", "0"))
+        account_types = None
+        if args.account_types:
+            # Never write or echo this output; it can contain account addresses.
+            account_types = parse_known_account_types(adb("shell", "dumpsys", "account"))
         versions = {}
         for name in PACKAGE_NAMES:
             if name in installed:
@@ -122,7 +188,9 @@ def main():
         print(f"Tanılama tamamlanamadı: {exc}", file=sys.stderr)
         return 1
 
-    report = build_report(properties, installed, versions)
+    report = build_report(properties, installed, versions, uids)
+    if account_types is not None:
+        report += build_account_type_report(*account_types)
     print(report, end="")
     if args.output:
         from pathlib import Path
