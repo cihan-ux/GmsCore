@@ -249,6 +249,86 @@ def read_adb_log(max_lines=3000, focused=False):
             raise RuntimeError(f"ADB_CAPTURE_FAILED ({first}; {second})") from second
 
 
+
+CRASH_CLASSES = (
+    "SecurityException", "NullPointerException", "IllegalStateException",
+    "RemoteException", "RuntimeException", "DeadObjectException",
+)
+
+
+def summarize_playstore_crashes(raw):
+    """Count AndroidRuntime crash events from the Play Store process only."""
+    lines = raw.splitlines()
+    found = []
+    for idx, line in enumerate(lines):
+        # Match exact process, never an arbitrary log line mentioning Play Store.
+        if not re.search(r"\bProcess:\s*com\.android\.vending(?:\s|,|$)", line):
+            continue
+        previous = "\n".join(lines[max(0, idx - 5):idx + 1])
+        if "FATAL EXCEPTION" not in previous:
+            continue
+        crash_time = "not available"
+        for candidate in reversed(lines[max(0, idx - 5):idx + 1]):
+            stamp = STAMP.search(candidate)
+            if stamp:
+                crash_time = stamp.group(1)
+                break
+        category = "OTHER_OR_UNKNOWN"
+        for candidate in lines[idx + 1:min(idx + 10, len(lines))]:
+            if "FATAL EXCEPTION" in candidate or "Process:" in candidate:
+                break
+            for label in CRASH_CLASSES:
+                if re.search(r"\b(?:java\.lang\.|android\.os\.)?" + label + r"\b", candidate):
+                    category = label
+                    break
+            if category != "OTHER_OR_UNKNOWN":
+                break
+        found.append((crash_time, category))
+    return found
+
+
+def build_crash_report(raw, mode):
+    events = summarize_playstore_crashes(raw)
+    lines = [
+        "",
+        "PLAY STORE CRASH BUFFER (read-only, sanitized)",
+        f"Crash capture mode: {mode}",
+        f"Crash buffer lines scanned: {len(raw.splitlines())}",
+        f"FATAL EXCEPTION events belonging to com.android.vending: {len(events)}",
+    ]
+    for timestamp, kind in events[-5:]:
+        lines.append(f"  Play Store crash: {timestamp} | exception category: {kind}")
+    if not events:
+        lines.append(
+            "No matching crash seen in available buffer."
+            " This does not rule out a UI error, ANR or an older crash."
+        )
+    lines.append(
+        "No raw stack traces, email addresses, account names or tokens are printed."
+    )
+    return "\n".join(lines) + "\n"
+
+
+def read_crash_buffer():
+    """Read crash log buffer; never clear it or print raw entries."""
+    cmd = ("adb", "logcat", "-d", "-b", "crash", "-t", "1000", "-v", "threadtime")
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=35, check=False,
+        )
+    except FileNotFoundError:
+        return "", "ADB_NOT_FOUND"
+    except subprocess.TimeoutExpired:
+        return "", "ADB_TIMEOUT"
+    except OSError:
+        return "", "ADB_EXECUTION_FAILED"
+    if result.returncode:
+        return "", "ADB_CRASH_BUFFER_UNAVAILABLE"
+    return result.stdout, "STANDARD (1000 lines requested)"
+
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--from-file", metavar="PATH",
@@ -257,6 +337,8 @@ def main():
                         help="ADB logcat line limit (300..10000; default: 3000)")
     parser.add_argument("--focused", action="store_true",
                         help="Use a read-only tag filter for Finsky and Android package installer logs")
+    parser.add_argument("--crash-check", action="store_true",
+                        help="Also inspect crash buffer for Play Store FATAL EXCEPTION events")
     args = parser.parse_args()
     if not 300 <= args.max_lines <= 10000:
         parser.error("--max-lines must be between 300 and 10000")
@@ -277,6 +359,9 @@ def main():
     print(build_report(*summarize(raw)), end="")
     print(f"Log capture mode: {capture_mode}")
     print(build_coverage_report(*scan_coverage(raw)), end="")
+    if args.crash_check:
+        crash_raw, crash_mode = read_crash_buffer()
+        print(build_crash_report(crash_raw, crash_mode), end="")
     return 0
 
 
