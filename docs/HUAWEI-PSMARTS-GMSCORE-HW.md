@@ -74,8 +74,50 @@ Bağlı cihaz için cihaz izinleri gerektiğinden **ADB üzerinden** çalışır
 Testler (cihaz gerekmez):
 
 ~~~sh
-python3 -m unittest discover -s tools -p 'test_huawei_gms_diagnostics.py'
+python3 -m unittest discover -s tools -p 'test_huawei_*.py'
 ~~~
+
+## Play Store günlüklerini güvenli şekilde sınıflandırma
+
+Önce sorunlu ücretsiz bir uygulamayı Play Store'da indirmeyi tekrar
+deneyin. Ardından Linux Mint'te **salt okunur** tarayıcıyı çalıştırın:
+
+~~~sh
+python3 tools/huawei_playstore_errors.py
+~~~
+
+Araç Android'in `adb logcat -d` komutuyla son 20.000 kayıt satırını
+belleğe alır. **Logları temizlemez**, yüklü uygulamalara dokunmaz.
+Yalnızca önceden tanımlanmış hata kategorilerinin sayı ve zamanını
+raporlar; ham kayıtları, Google hesaplarını, e-postaları, Google
+erişim tokenlarını ve uygulama dosya yollarını yazdırmaz.
+Bağlantı için USB hata ayıklama açık olmalıdır.
+
+Eski bir log dosyasını yerel olarak analiz etmek için:
+
+~~~sh
+python3 tools/huawei_playstore_errors.py --from-file ~/playstore-install-errors.txt
+~~~
+
+DİKKAT: Kullanıcının daha önce kaydettiği *ham* log dosyaları hesap
+adresleri veya tokenlar içerebilir. Bunları paylaşmayın. Yalnızca
+filtrelenmiş tanılama aracının çıktısını paylaşın.
+
+Tanılama şu durumları birbirinden ayırır:
+
+- `PLAY_STORE_ACCOUNT_PRIVATE_DATA_DENIED`: Android hesap türünün özel
+  verilerine erişim reddi; hesap görünürlüğü tek başına yeterli değildir.
+- `PLAY_STORE_ACCOUNT_METADATA_FETCH_FAILED`: Play Store hesabı okumada hata.
+- `ANDROID_PROTECTED_USER_PERMISSION_DENIED`: Korunan Android yönetici izni hatası.
+- `PLAY_STORE_SELF_UPDATE_FAILED`: Play Store'un **kendi güncellemesi** hata verdi;
+  normal uygulama yükleme hatasıyla karıştırılmamalıdır.
+- `PACKAGE_INSTALL_FAILURE` ve `FINSKY_DOWNLOAD_FAILURE`:
+  paket kurulumuyla indirme aşamasındaki ayrı hata işaretleri.
+
+GitHub Actions'ın analiz aracına ait testleri cihaz kullanmadan çalıştırır.
+**Uyarı:** Logcat eski hataları da içerir; testten sonra hemen okumak
+zaman eşlemesini kolaylaştırır. Bir olayın görülmesi nedensellik kanıtı değildir.
+Herhangi bir kayda rastlanmaması da yüklemenin başarılı olduğu anlamına gelmez.
 
 ## Play Store hatasının yorumu
 
