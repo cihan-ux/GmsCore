@@ -2,7 +2,9 @@
 """Offline fixtures for the sanitized Huawei Play Store log analyzer."""
 import unittest
 
-from huawei_playstore_errors import summarize, build_report, classify
+from huawei_playstore_errors import (
+    summarize, build_report, classify, scan_coverage, build_coverage_report,
+)
 
 
 class PlayStoreErrorSummaryTests(unittest.TestCase):
@@ -78,6 +80,50 @@ class PlayStoreErrorSummaryTests(unittest.TestCase):
         out = build_report(*summarize(""))
         self.assertIn("does not by itself prove", out)
         self.assertIn("PLAY_STORE_ACCOUNT_PRIVATE_DATA_DENIED: 0 event(s)", out)
+
+
+    def test_coverage_reports_when_no_finsky_logs_are_present(self):
+        raw = (
+            "10-19 22:31:10.100 I/ActivityManager( 1549): some event\n"
+            "10-19 22:31:12.200 D/OtherApp( 1200): benign event\n"
+        )
+        counts, _ = summarize(raw)
+        self.assertEqual(0, sum(counts.values()))
+        coverage, first, last = scan_coverage(raw)
+        self.assertEqual(2, coverage["all_lines"])
+        self.assertEqual(0, coverage["finsky_lines"])
+        report = build_coverage_report(coverage, first, last)
+        self.assertIn("NO FINSKY LOGS", report)
+        self.assertIn("10-19 22:31:10", report)
+        self.assertIn("10-19 22:31:12", report)
+
+    def test_coverage_with_finsky_but_no_known_errors(self):
+        raw = (
+            "10-19 22:32:00.001 I/Finsky  (1234): Finsky started\n"
+            "10-19 22:32:01.002 I/Finsky:background(998): download running\n"
+            "10-19 22:32:01.003 I/PackageInstaller(1549): session created\n"
+            "10-19 22:32:02.004 I/Finsky: package com.android.vending loaded\n"
+        )
+        coverage, first, last = scan_coverage(raw)
+        self.assertEqual(3, coverage["finsky_lines"])
+        self.assertEqual(1, coverage["installer_lines"])
+        self.assertEqual(1, coverage["vending_mentions"])
+        self.assertIn("Finsky logs are present", build_coverage_report(coverage, first, last))
+        self.assertEqual(0, sum(summarize(raw)[0].values()))
+
+    def test_coverage_empty_and_private_content_is_filtered(self):
+        empty = build_coverage_report(*scan_coverage(""))
+        self.assertIn("EMPTY", empty)
+        secret = (
+            "10-19 22:32:00.123 E/Finsky  (9999): "
+            "my.name@example.com token=ya29.private_user_token "
+            "/data/user/0/com.android.vending/secret"
+        )
+        sanitized = build_coverage_report(*scan_coverage(secret))
+        self.assertIn("Finsky-tagged lines: 1", sanitized)
+        for data in ("my.name", "example.com", "ya29", "token=", "/data/user/"):
+            self.assertNotIn(data, sanitized)
+
 
 
 if __name__ == "__main__":
