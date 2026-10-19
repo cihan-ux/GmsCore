@@ -1,0 +1,16 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'org.psmarts.rootlesslab.smoke'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'org.psmarts.rootlesslab.smoke'
+        minSdk 29
+        targetSdk 29
+        versionCode 1
+        versionName '1.0'
+    }
+}

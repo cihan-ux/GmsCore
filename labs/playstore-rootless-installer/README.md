@@ -37,3 +37,16 @@ Output: `labs/playstore-rootless-installer/app/build/outputs/apk/debug/app-debug
 - No APK uninstall, clearing app data, signing new Play Store APK, root, or EMUI rollback.
 - No proprietary Play Store APK, private signing key, account credentials, or OAuth tokens should ever be committed to this public repository.
 - Any future Play Store-specific patch must be built and verified independently, and will need a safe data-preservation/installation plan due to its differing signature.
+
+## Safe test with a disposable APK
+
+The same workflow also builds `PSmartS-Disposable-Install-Test`: a separate application (`org.psmarts.rootlesslab.smoke`) that has **no permissions**, does not connect to the network, and displays a simple confirmation message.
+
+1. From the successful workflow run, download both Artifacts ZIP files.
+2. Unzip `PSmartS-Rootless-Installer-Lab` and install `app-debug.apk` (lab app) on the phone.
+3. Extract `smoke-app-debug.apk` from `PSmartS-Disposable-Install-Test`; copy it into the phone's Downloads folder. **Do not install this test APK manually.**
+4. Open Rootless Installer Lab, select the copied `smoke-app-debug.apk`, grant the lab app the Android "Install unknown apps" permission only if requested, and follow the system install confirmation.
+5. Verify via `adb shell pm path org.psmarts.rootlesslab.smoke`; a returned APK path means the test package was installed. Opening the `Installer Smoke Test` app should show a success message.
+6. When finished, disable the lab's unknown-app-install permission. To remove **only the disposable sample**, use `adb uninstall org.psmarts.rootlesslab.smoke`.
+
+This verifies Android's user-approved APK installation, **NOT** Google Play's ability to download an app. Do not infer that Play Store is repaired from success of this smoke test.

@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = 'PlayStoreRootlessInstallerLab'
-include ':app'
+include ':app', ':smoke-app'
