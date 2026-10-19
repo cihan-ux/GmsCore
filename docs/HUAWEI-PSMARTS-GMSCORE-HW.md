@@ -114,6 +114,18 @@ Tanılama şu durumları birbirinden ayırır:
 - `PACKAGE_INSTALL_FAILURE` ve `FINSKY_DOWNLOAD_FAILURE`:
   paket kurulumuyla indirme aşamasındaki ayrı hata işaretleri.
 
+**Önemli: Yedi hata türünün tamamının sıfır olması başarı değildir.**
+Araç ayrıca `LOG COVERAGE` bölümünde toplam satır sayısını, günlüklerin
+ilk/son görülen zamanını, `Finsky` ve `PackageInstaller` kayıt sayılarını
+gösterir. `NO FINSKY LOGS` uyarısı, bu taramanın Play Store hakkında
+yeterli günlük görmediğini ifade eder. `Finsky logs are present` ise yalnızca
+bazı Play Store kayıtlarının alındığını kanıtlar; kurulum başarısını değil.
+
+Bir uygulamanın indirilmesini **yeni denedikten hemen sonra** aynı komutu
+çalıştırın ve görülen zaman aralığını kontrol edin. Yeni hata yoksa bile
+Android logları filtrelenmiş veya tamponda silinmiş olabilir. Her zaman
+telefonun çalışmasını gözlemleyerek karar verin.
+
 GitHub Actions'ın analiz aracına ait testleri cihaz kullanmadan çalıştırır.
 **Uyarı:** Logcat eski hataları da içerir; testten sonra hemen okumak
 zaman eşlemesini kolaylaştırır. Bir olayın görülmesi nedensellik kanıtı değildir.
