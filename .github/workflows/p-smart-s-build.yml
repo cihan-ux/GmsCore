@@ -1,15 +1,26 @@
-name: P Smart S - GmsCore Huawei release
+name: P Smart S - GmsCore Huawei build and verification
 
-# Run manually from the GitHub Actions tab, avoiding unnecessary builds.
 on:
+  push:
+    branches: [gmscore-hw-diagnostics]
+    paths:
+      - '.github/workflows/p-smart-s-build.yml'
+      - 'tools/huawei_gms_diagnostics.py'
+      - 'tools/test_huawei_gms_diagnostics.py'
+      - 'docs/HUAWEI-PSMARTS-GMSCORE-HW.md'
+      - 'play-services-core/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: gmscore-huawei-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-huawei:
-    name: Build hmsHuaweiRelease
+    name: Huawei GmsCore signed debug / unsigned release
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -20,6 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -30,21 +42,86 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Build Huawei (-hw) release APK
+      - name: Test safe ADB diagnostics without any connected device
+        run: python3 -m unittest discover -s tools -p 'test_huawei_gms_diagnostics.py'
+
+      - name: Ensure Android SDK tools are installed
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Build signed debug and unsigned release (-hw)
         run: |
           chmod +x ./gradlew
           touch local.properties
-          ./gradlew :play-services-core:assembleHmsHuaweiRelease --no-daemon --max-workers=2
+          ./gradlew :play-services-core:assembleHmsHuaweiDebug :play-services-core:assembleHmsHuaweiRelease --no-daemon --max-workers=2
 
-      - name: Display APK checksums
+      - name: Verify APK package IDs, signing and checksums
+        shell: bash
         run: |
-          find play-services-core/build/outputs/apk/hmsHuawei/release \
-            -maxdepth 1 -type f -name '*.apk' -print -exec sha256sum {} \;
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          debug="$(find play-services-core/build/outputs/apk/hmsHuawei/debug -maxdepth 1 -name '*.apk' -type f -print -quit)"
+          release="$(find play-services-core/build/outputs/apk/hmsHuawei/release -maxdepth 1 -name '*.apk' -type f -print -quit)"
+          test -n "$debug"
+          test -n "$release"
 
-      - name: Upload unsigned release APK
+          debug_badging="$("$tools/aapt" dump badging "$debug")"
+          release_badging="$("$tools/aapt" dump badging "$release")"
+          if [[ "$debug_badging" != *"name='com.google.android.gms'"* ]] ||
+             [[ "$debug_badging" != *"-hw'"* ]] ||
+             [[ "$release_badging" != *"name='com.google.android.gms'"* ]] ||
+             [[ "$release_badging" != *"-hw'"* ]]; then
+            echo 'ERROR: unexpected package ID or Huawei flavor'
+            exit 1
+          fi
+
+          mkdir -p dist/debug dist/release
+          cp "$debug" dist/debug/GmsCore-hw-SIGNED-DEBUG.apk
+          cp "$release" dist/release/GmsCore-hw-UNSIGNED-RELEASE.apk
+          "$tools/apksigner" verify --verbose --print-certs dist/debug/GmsCore-hw-SIGNED-DEBUG.apk \
+            > dist/debug/APK-SIGNATURE.txt
+
+          # The release variant has no configured signing key. Do not mislabel it.
+          if "$tools/apksigner" verify dist/release/GmsCore-hw-UNSIGNED-RELEASE.apk >/dev/null 2>&1; then
+            echo 'ERROR: release APK unexpectedly signed; review labels and signing policy'
+            exit 1
+          fi
+          (
+            cd dist/debug
+            sha256sum GmsCore-hw-SIGNED-DEBUG.apk > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
+          (
+            cd dist/release
+            sha256sum GmsCore-hw-UNSIGNED-RELEASE.apk > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
+          {
+            echo '## Huawei GmsCore-hw package verification'
+            echo ''
+            echo '- Both APKs are from the hmsHuawei flavor; package: com.google.android.gms'
+            echo '- Signed DEBUG APK: APK signature verified'
+            echo '- RELEASE APK: intentionally unsigned and not directly installable'
+            echo '- Debug signing identity may change between GitHub Actions runs'
+            echo '- Do **not** overwrite an installed GmsCore or uninstall applications without backups'
+            echo ''
+            echo '### Debug APK checksum'
+            echo '~~' 
+            cat dist/debug/SHA256SUMS.txt
+            echo '~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload signed DEBUG APK for controlled testing
         uses: actions/upload-artifact@v4
         with:
-          name: PSmartS-GmsCore-hw-release-${{ github.run_number }}
-          path: play-services-core/build/outputs/apk/hmsHuawei/release/*.apk
+          name: PSmartS-GmsCore-hw-SIGNED-DEBUG-${{ github.run_number }}
+          path: dist/debug/*
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
+
+      - name: Upload unsigned RELEASE APK for development only
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSmartS-GmsCore-hw-UNSIGNED-RELEASE-${{ github.run_number }}
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 14
