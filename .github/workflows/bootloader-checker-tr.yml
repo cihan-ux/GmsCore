@@ -1,0 +1,90 @@
+name: Bootloader Checker TR Debug APK
+
+on:
+  push:
+    branches: [bootloader-checker-tr]
+    paths:
+      - 'bootloader-checker/**'
+      - '.github/workflows/bootloader-checker-tr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bootloader-checker-tr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/bootloader-checker-tr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: bootloader-checker
+        shell: bash
+    steps:
+      - name: Depoyu indir
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: JDK 17 hazirla
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK hazirla
+        uses: android-actions/setup-android@v3
+
+      - name: Android SDK 35 paketlerini kur
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+
+      - name: Gradle Wrapper butunlugunu dogrula
+        run: |
+          echo '498495120a03b9a6ab5d155f5de3c8f0d986a449153702fb80fc80e134484f17  gradle/wrapper/gradle-wrapper.jar' | sha256sum --check --strict
+          chmod +x gradlew
+
+      - name: Birim testleri
+        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
+
+      - name: Android Lint
+        run: ./gradlew --no-daemon --stacktrace :app:lintDebug
+
+      - name: Debug APK derle
+        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
+
+      - name: APK ve SHA-256 hazirla
+        run: |
+          mkdir -p app/build/distributions
+          install -m 644 app/build/outputs/apk/debug/app-debug.apk app/build/distributions/Bootloader-Checker-TR-debug.apk
+          cd app/build/distributions
+          sha256sum Bootloader-Checker-TR-debug.apk > SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+          printf '### Debug APK SHA-256\n\n```text\n' >> "$GITHUB_STEP_SUMMARY"
+          cat SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
+          printf '```\n' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: APK ve SHA-256 artifact yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bootloader-Checker-TR-debug
+          path: |
+            bootloader-checker/app/build/distributions/Bootloader-Checker-TR-debug.apk
+            bootloader-checker/app/build/distributions/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Test ve Lint raporlarini yukle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bootloader-Checker-TR-reports
+          path: |
+            bootloader-checker/app/build/reports/tests/testDebugUnitTest/**
+            bootloader-checker/app/build/test-results/testDebugUnitTest/**
+            bootloader-checker/app/build/reports/lint-results-debug.*
+          if-no-files-found: warn
+          retention-days: 30
