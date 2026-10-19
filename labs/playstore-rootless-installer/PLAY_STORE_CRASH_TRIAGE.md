@@ -36,3 +36,28 @@ adb logcat -d -b crash -v threadtime |
 Do not root/downgrade, clear Google accounts, uninstall/replace the existing Play Store, install an official Google-signed replacement over the experimental store, or assume that changing an AccountManager exception will fix downloads. A repackaged Play Store would require a different signing key and may not update over the installed experimental APK.
 
 When the crash stack is available, inspect the *first* `Caused by` and its caller stack, distinguish Play Store `self-update`, UI crash, account access, signature/registration rejection, and networking.
+
+## Update: 2026-10-20 00:12 — repeat recovery-mode screen and font provider rejection
+
+Later filtered action log captures rapid launches of `com.google.android.finsky.recoverymode.impl.RecoveryModeActivity`, replacing the regular `AssetBrowserActivity`. In the regular activity process Finsky logs:
+
+```
+Failed to preload font resources.
+Unable to load font Font(GoogleFont("Google Sans Text", bestEffort=true))
+reason=-2, The given provider cannot be authenticated with the certificates given.
+```
+
+Android's `FontsContract.FontRequestCallback.FAIL_REASON_WRONG_CERTIFICATES` is `-2`; the downloadable font provider's installed signer did not match the trust list for that font request (see https://developer.android.com/reference/android/provider/FontsContract.FontRequestCallback). This is a **real cert validation failure**, but it is not proof that the font preload failure caused the earlier crash or that it blocks install requests. Need capture actual fatal stack trace and/or provider authority before patching.
+
+The file supplied for this check was another **filtered action log** (`playstore-action-log(1).txt`), not the previously requested `playstore-fatal.txt`. The filtering excludes AndroidRuntime, so the fatal exception remains unknown. Explicitly request the crash-buffer file before inferring a root cause.
+
+### Minimal crash-buffer collection
+
+```bash
+adb logcat -c
+# Open Play Store on the phone and reproduce the crash or error.
+adb logcat -d -b crash -v threadtime > "$HOME/playstore-fatal.txt"
+wc -l "$HOME/playstore-fatal.txt"
+```
+
+Review output for sensitive identifiers/tokens before sharing. If file is empty, collect matching fatal snippets from main/system with `AndroidRuntime`, `FATAL EXCEPTION`, `DEBUG`, and `libc` tags; avoid filtered `Finsky`-only output.
