@@ -38,4 +38,10 @@
     <string name="report_label">Türkçe bootloader kontrol raporu</string>
     <string name="report_copied">Rapor panoya kopyalandı</string>
     <string name="clipboard_failed">Panoya erişilemedi</string>
+    <string name="fastboot_heading">03  FASTBOOT ÇIKTISIYLA KARŞILAŞTIR (İSTEĞE BAĞLI)</string>
+    <string name="fastboot_intro">Bilgisayarda Fastboot ile önceden aldığınız kilit durumu çıktısını buraya yapıştırabilirsiniz. Uygulama Fastboot çalıştırmaz, komut göndermez ve telefonun kilidini açmaz. Yapıştırılan metnin kaynağı doğrulanamaz.</string>
+    <string name="fastboot_hint">(bootloader) locked</string>
+    <string name="fastboot_check">Yapıştırılan Çıktıyı Değerlendir</string>
+    <string name="fastboot_waiting">Fastboot verisi henüz değerlendirilmedi</string>
+    <string name="fastboot_notice">FRP kilidi veya “Command not allowed” yanıtı bootloader kilit kanıtı değildir. Bu karşılaştırma kilit açılabilirliğini belirlemez.</string>
 </resources>
