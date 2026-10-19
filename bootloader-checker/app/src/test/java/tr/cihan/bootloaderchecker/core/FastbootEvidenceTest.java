@@ -8,7 +8,7 @@ import org.junit.Test;
 public final class FastbootEvidenceTest {
     @Test public void huaweiGetBootinfoLocked() {
         FastbootEvidence result = FastbootEvidence.parse(
-                "(bootloader) locked\\nOKAY [  0.010s]\\nFinished. Total time: 0.018s");
+                "(bootloader) locked\nOKAY [  0.010s]\nFinished. Total time: 0.018s");
         assertEquals(FastbootEvidence.Lock.LOCKED, result.lock);
         assertEquals(1, result.recognizedLines);
     }
@@ -31,20 +31,20 @@ public final class FastbootEvidenceTest {
 
     @Test public void errorsAndFrpDoNotProveStatus() {
         FastbootEvidence result = FastbootEvidence.parse(
-                "FAILED (remote: Command not allowed)\\n(bootloader) FRP LockState: LOCKED"
-                        + "\\n(bootloader) unlock_ability: 0");
+                "FAILED (remote: Command not allowed)\n(bootloader) FRP LockState: LOCKED"
+                        + "\n(bootloader) unlock_ability: 0");
         assertEquals(FastbootEvidence.Lock.UNKNOWN, result.lock);
         assertEquals(0, result.recognizedLines);
     }
 
     @Test public void doesNotTreatAnyNakedLockedWordAsEvidence() {
         assertEquals(FastbootEvidence.Lock.UNKNOWN,
-                FastbootEvidence.parse("locked\\nthis phone is unlocked").lock);
+                FastbootEvidence.parse("locked\nthis phone is unlocked").lock);
     }
 
     @Test public void contradictingStatusGivesConflict() {
         FastbootEvidence result = FastbootEvidence.parse(
-                "(bootloader) locked\\n(bootloader) unlocked: yes");
+                "(bootloader) locked\n(bootloader) unlocked: yes");
         assertEquals(FastbootEvidence.Lock.CONFLICT, result.lock);
         assertEquals(2, result.recognizedLines);
     }
@@ -52,7 +52,7 @@ public final class FastbootEvidenceTest {
     @Test public void emptyOrLongOutputIsUnknown() {
         assertEquals(FastbootEvidence.Lock.UNKNOWN, FastbootEvidence.parse(null).lock);
         FastbootEvidence big = FastbootEvidence.parse("(bootloader) locked"
-                + new String(new char[12_001]).replace('\\0', 'x'));
+                + new String(new char[12_001]).replace('\0', 'x'));
         assertEquals(FastbootEvidence.Lock.UNKNOWN, big.lock);
         assertTrue(big.inputTooLong);
     }
