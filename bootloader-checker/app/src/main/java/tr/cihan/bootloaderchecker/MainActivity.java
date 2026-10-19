@@ -9,9 +9,15 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.InputFilter;
+import android.text.InputType;
+import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -26,6 +32,7 @@ import java.util.concurrent.Future;
 import tr.cihan.bootloaderchecker.core.Assessment;
 import tr.cihan.bootloaderchecker.core.DeviceInfo;
 import tr.cihan.bootloaderchecker.core.Evidence;
+import tr.cihan.bootloaderchecker.core.FastbootEvidence;
 import tr.cihan.bootloaderchecker.core.PropertyReading;
 import tr.cihan.bootloaderchecker.core.ReportFormatter;
 
@@ -50,6 +57,12 @@ public final class MainActivity extends Activity {
     private TextView supportConfidence;
     private TextView stamp;
     private String report = "";
+    private String reportBase = "";
+    private Assessment lastAssessment;
+    private EditText fastbootInput;
+    private TextView fastbootTitle;
+    private TextView fastbootDetail;
+    private Button assessFastboot;
     private Future<?> runningScan;
     private int scanGeneration;
 
@@ -121,6 +134,37 @@ public final class MainActivity extends Activity {
         addText(huawei, ReportFormatter.HUAWEI_NOTICE, 15, MUTED, false);
         addText(huawei, getString(R.string.oem_caveat), 14, MUTED, false);
 
+        LinearLayout fastboot = card();
+        heading(fastboot, getString(R.string.fastboot_heading), 19);
+        addText(fastboot, getString(R.string.fastboot_intro), 14, MUTED, false);
+        fastbootInput = new EditText(this);
+        fastbootInput.setTextSize(14);
+        fastbootInput.setHint(R.string.fastboot_hint);
+        fastbootInput.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        fastbootInput.setSingleLine(false);
+        fastbootInput.setMinLines(3);
+        fastbootInput.setMaxLines(6);
+        fastbootInput.setGravity(Gravity.TOP | Gravity.START);
+        fastbootInput.setFilters(new InputFilter[] { new InputFilter.LengthFilter(12_001) });
+        fastboot.addView(fastbootInput, new LinearLayout.LayoutParams(-1, -2));
+        assessFastboot = actionButton(fastboot, R.string.fastboot_check, false);
+        assessFastboot.setOnClickListener(view -> checkFastboot());
+        fastbootTitle = addText(fastboot, getString(R.string.fastboot_waiting), 16, INK, true);
+        fastbootDetail = addText(fastboot, getString(R.string.fastboot_notice), 14, MUTED, false);
+        fastbootInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text, int start,
+                    int count, int after) { }
+            @Override public void onTextChanged(CharSequence text, int start,
+                    int before, int count) {
+                // A changed paste invalidates the previously interpreted manual evidence.
+                fastbootTitle.setText(R.string.fastboot_waiting);
+                fastbootDetail.setText(R.string.fastboot_notice);
+                report = reportBase;
+            }
+            @Override public void afterTextChanged(Editable text) { }
+        });
+
         LinearLayout actions = card();
         progress = new ProgressBar(this);
         progress.setIndeterminateTintList(ColorStateList.valueOf(ACCENT));
@@ -150,6 +194,11 @@ public final class MainActivity extends Activity {
         final int generation = ++scanGeneration;
         // Clear the previous snapshot immediately, including the clipboard source.
         report = "";
+        reportBase = "";
+        lastAssessment = null;
+        fastbootTitle.setText(R.string.fastboot_waiting);
+        fastbootDetail.setText(R.string.fastboot_notice);
+        assessFastboot.setEnabled(false);
         refresh.setEnabled(false);
         copy.setEnabled(false);
         progress.setVisibility(View.VISIBLE);
@@ -185,9 +234,12 @@ public final class MainActivity extends Activity {
                     supportDetail.setText(result.supportExplanation());
                     showEvidence(result);
                     stamp.setText(getString(R.string.last_checked, time));
-                    report = currentReport;
+                    lastAssessment = result;
+                    reportBase = currentReport;
+                    report = reportBase;
                     progress.setVisibility(View.GONE);
                     refresh.setEnabled(true);
+                    assessFastboot.setEnabled(true);
                     copy.setEnabled(true);
                 });
             } catch (InterruptedException exception) {
@@ -218,7 +270,17 @@ public final class MainActivity extends Activity {
         stamp.setText(messageId);
         progress.setVisibility(View.GONE);
         refresh.setEnabled(true);
+        assessFastboot.setEnabled(true);
         copy.setEnabled(false);
+    }
+
+    private void checkFastboot() {
+        FastbootEvidence manual = FastbootEvidence.parse(fastbootInput.getText().toString());
+        fastbootTitle.setText(manual.title());
+        fastbootDetail.setText(manual.explanation() + "\n" + manual.compare(lastAssessment)
+                + "\n" + getString(R.string.fastboot_notice));
+        // Pasted raw text is deliberately excluded from the report (it may contain IDs).
+        report = reportBase.isEmpty() ? "" : reportBase + "\n" + manual.report(lastAssessment);
     }
 
     private void showEvidence(Assessment result) {
@@ -336,6 +398,8 @@ public final class MainActivity extends Activity {
     @Override protected void onDestroy() {
         scanGeneration++;
         report = "";
+        reportBase = "";
+        lastAssessment = null;
         if (runningScan != null) runningScan.cancel(true);
         worker.shutdownNow();
         super.onDestroy();
