@@ -106,6 +106,13 @@ Yeni `PLAY STORE CRASH CAUSE INDICATORS` bölümü, her çökme için
 `OTHER_SECURITY_EXCEPTION` gibi sabit adlarla olası hata sınıfını
 özetler. `RuntimeException` altında `Caused by: SecurityException`
 bulunursa genel sınıf yerine daha belirli işaret raporlanabilir.
+Yeni `CRASH SECURITY CONTEXT` bölümü yalnızca önceden tanımlanmış
+Android izin adlarını (örneğin `INTERACT_ACROSS_USERS`, `MANAGE_USERS`,
+`GET_ACCOUNTS_PRIVILEGED`) ve ilgili framework bileşenlerini
+(`ACCOUNT_MANAGER`, `USER_MANAGER`, `PACKAGE_MANAGER`) raporlar.
+İzin adı görünmesi tek başına reddedilen işlemin bu izin olduğu anlamına
+gelmez; ham istisna mesajları ve özel hesap bilgileri dışarıya aktarılmaz.
+
 Bu sezgisel eşleştirme **kesin neden kanıtı değildir**; eksik
 AndroidRuntime günlükleri veya farklı üretici uygulamaları eşleştirmeyi
 sınırlayabilir.
