@@ -39,28 +39,30 @@ public class OwServiceImpl extends IOwService.Stub {
 
     @Override
     public void isReadyToPay(IsReadyToPayRequest request, Bundle args, IWalletServiceCallbacks callbacks) throws RemoteException {
-        Log.d(TAG, "isReadyToPay: " + request.toJson());
+        Log.d(TAG, "isReadyToPay requested; eligibility is not implemented");
         try {
             callbacks.onIsReadyToPayResponse(Status.SUCCESS, false, Bundle.EMPTY);
         } catch (Exception e) {
-            Log.w(TAG, e);
+            Log.w(TAG, "isReadyToPay: callback delivery failed");
         }
     }
 
     @Override
     public void getClientToken(GetClientTokenRequest getClientTokenRequest, Bundle options, IWalletServiceCallbacks callbacks) throws RemoteException {
-        Log.d(TAG, "getClientToken: " + options);
+        // No server-issued first-party client token provider is implemented. Never report SUCCESS.
+        // Do not log request, options, account identifiers, tokens, or callback exceptions.
+        Log.i(TAG, "getClientToken requested; returning INTERNAL_ERROR (unsupported)");
         try {
             callbacks.onClientTokenReceived(Status.INTERNAL_ERROR, new GetClientTokenResponse(), Bundle.EMPTY);
         } catch (Exception e) {
-            Log.w(TAG, e);
+            Log.w(TAG, "getClientToken: callback delivery failed");
         }
     }
 
     @Override
     public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
         if (super.onTransact(code, data, reply, flags)) return true;
-        Log.d(TAG, "onTransact [unknown]: " + code + ", " + data + ", " + flags);
+        Log.d(TAG, "onTransact: unknown transaction code " + code);
         return false;
     }
 }
