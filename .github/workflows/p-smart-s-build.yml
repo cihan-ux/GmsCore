@@ -7,6 +7,8 @@ on:
       - '.github/workflows/p-smart-s-build.yml'
       - 'tools/huawei_gms_diagnostics.py'
       - 'tools/test_huawei_gms_diagnostics.py'
+      - 'tools/huawei_playstore_errors.py'
+      - 'tools/test_huawei_playstore_errors.py'
       - 'docs/HUAWEI-PSMARTS-GMSCORE-HW.md'
       - 'play-services-core/**'
   workflow_dispatch:
@@ -43,7 +45,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test safe ADB diagnostics without any connected device
-        run: python3 -m unittest discover -s tools -p 'test_huawei_gms_diagnostics.py'
+        run: python3 -m unittest discover -s tools -p 'test_huawei_*.py'
 
       - name: Set up Android SDK command-line tools
         uses: android-actions/setup-android@v3
