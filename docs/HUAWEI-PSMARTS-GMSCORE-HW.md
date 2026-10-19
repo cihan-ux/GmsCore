@@ -86,6 +86,21 @@ deneyin. Ardından Linux Mint'te **salt okunur** tarayıcıyı çalıştırın:
 python3 tools/huawei_playstore_errors.py --focused
 ~~~
 
+**Play Store açılırken hata veriyor veya kapanıyorsa** indirme testine
+gerek yoktur. Play Store'u bir kez açıp hatanın görülmesini bekleyin;
+hemen ardından `--focused --crash-check` kullanın:
+
+~~~sh
+python3 tools/huawei_playstore_errors.py --focused --crash-check
+~~~
+
+Bu seçenek `Finsky` günlüklerine ek olarak Android'in `crash` tamponundaki
+`com.android.vending` uygulama sürecine ait `FATAL EXCEPTION` olaylarını
+sayar; sadece zaman damgası ve sabit hata sınıfı adlarını gösterir.
+Ham stack trace, Google hesabı, token veya diğer uygulamalara ait
+crash verileri rapora eklenmez. Kapanma yerine yalnızca hata balonu
+oluşmuşsa crash sayısının sıfır olması normaldir.
+
 **Önerilen yol:** Play Store'da daha önce yüklenmemiş ücretsiz bir
 uygulamayı indirmeyi denedikten hemen sonra `--focused` kullanın. Bu
 seçenek `Finsky`, `PackageInstaller` ve `PackageManager` log tag'lerini
