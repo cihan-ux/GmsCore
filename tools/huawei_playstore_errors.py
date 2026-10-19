@@ -132,6 +132,64 @@ def build_report(counts, latest):
     return "\n".join(lines) + "\n"
 
 
+
+def scan_coverage(raw):
+    """Count captured log lines and known tags; never return raw log text."""
+    coverage = Counter()
+    seen_times = []
+    for line in raw.splitlines():
+        coverage["all_lines"] += 1
+        if re.search(r"\bFinsky(?::background)?\b", line):
+            coverage["finsky_lines"] += 1
+        if "PackageInstaller" in line:
+            coverage["installer_lines"] += 1
+        if "com.android.vending" in line:
+            coverage["vending_mentions"] += 1
+        timestamp = STAMP.search(line)
+        if timestamp:
+            if not seen_times:
+                seen_times.append(timestamp.group(1))
+            coverage["timestamped_lines"] += 1
+            # Keep only the last observed timestamp, not complete log lines.
+            last_seen = timestamp.group(1)
+    return coverage, (seen_times[0] if seen_times else "not available"), (
+        last_seen if seen_times else "not available"
+    )
+
+
+def build_coverage_report(coverage, first_time, last_time):
+    """Summarize what was actually captured without claiming log completeness."""
+    lines = [
+        "",
+        "LOG COVERAGE (independent of matching errors)",
+        f"Captured lines: {coverage['all_lines']}",
+        f"Timestamped lines: {coverage['timestamped_lines']}",
+        f"First observed log timestamp: {first_time}",
+        f"Last observed log timestamp: {last_time}",
+        f"Finsky-tagged lines: {coverage['finsky_lines']}",
+        f"PackageInstaller-tagged lines: {coverage['installer_lines']}",
+        f"com.android.vending mentions: {coverage['vending_mentions']}",
+    ]
+    if not coverage["all_lines"]:
+        lines.append(
+            "Coverage: EMPTY. No logs captured; zero matching errors is inconclusive."
+        )
+    elif not coverage["finsky_lines"]:
+        lines.append(
+            "Coverage: NO FINSKY LOGS. Zero Finsky errors cannot exclude"
+            " a Play Store problem."
+        )
+    else:
+        lines.append(
+            "Coverage: Finsky logs are present, but this scan recognizes only"
+            " selected error patterns."
+        )
+    lines.append(
+        "Compare observed timestamps with the time of the latest Play Store test."
+    )
+    return "\n".join(lines) + "\n"
+
+
 def read_adb_log():
     try:
         result = subprocess.run(
@@ -164,7 +222,9 @@ def main():
         print("Tanılama başarısız: günlük dosyasını veya ADB bağlantısını kontrol edin.",
               file=sys.stderr)
         return 1
+    # Never print raw log lines, even when no patterns match.
     print(build_report(*summarize(raw)), end="")
+    print(build_coverage_report(*scan_coverage(raw)), end="")
     return 0
 
 
