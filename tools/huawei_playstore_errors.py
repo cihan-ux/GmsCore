@@ -190,40 +190,75 @@ def build_coverage_report(coverage, first_time, last_time):
     return "\n".join(lines) + "\n"
 
 
-def read_adb_log():
+def query_adb_log(max_lines, timeout=55):
+    """Return raw log bytes to caller memory only; error messages are fixed enums."""
     try:
         result = subprocess.run(
             ("adb", "logcat", "-d", "-b", "main", "-b", "system",
-             "-t", "20000", "-v", "threadtime"),
+             "-t", str(max_lines), "-v", "threadtime"),
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=40, check=False,
+            timeout=timeout, check=False,
         )
     except FileNotFoundError as exc:
-        raise RuntimeError("adb bulunamadı.") from exc
+        raise RuntimeError("ADB_NOT_FOUND") from exc
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("ADB logcat zaman aşımına uğradı.") from exc
+        raise RuntimeError("ADB_TIMEOUT") from exc
+    except OSError as exc:
+        raise RuntimeError("ADB_EXECUTION_FAILED") from exc
     if result.returncode:
-        raise RuntimeError("ADB logcat erişimi başarısız; USB bağlantısını kontrol edin.")
+        # stderr can contain device IDs, file paths or environment details.
+        raise RuntimeError("ADB_COMMAND_FAILED")
     return result.stdout
+
+
+def read_adb_log(max_lines=3000):
+    """Use a bounded capture and a smaller fallback on transient ADB failures.
+
+    Both attempts are read-only, and raw logs are never echoed, stored, or
+    uploaded by this tool. A fallback is explicitly labelled in the report.
+    """
+    try:
+        return query_adb_log(max_lines), f"STANDARD ({max_lines} lines requested)"
+    except RuntimeError as first:
+        if str(first) in ("ADB_NOT_FOUND", "ADB_EXECUTION_FAILED"):
+            raise
+        fallback_lines = min(300, max_lines)
+        if fallback_lines == max_lines:
+            raise
+        try:
+            return (
+                query_adb_log(fallback_lines, timeout=25),
+                f"FALLBACK ({fallback_lines} lines requested after {first})",
+            )
+        except RuntimeError as second:
+            raise RuntimeError(f"ADB_CAPTURE_FAILED ({first}; {second})") from second
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--from-file", metavar="PATH",
                         help="Read an existing local log file instead of querying ADB")
+    parser.add_argument("--max-lines", type=int, default=3000,
+                        help="ADB logcat line limit (300..10000; default: 3000)")
     args = parser.parse_args()
+    if not 300 <= args.max_lines <= 10000:
+        parser.error("--max-lines must be between 300 and 10000")
     try:
-        raw = (
-            Path(args.from_file).read_text(encoding="utf-8", errors="replace")
-            if args.from_file else read_adb_log()
-        )
-    except (OSError, RuntimeError) as exc:
-        # Never output raw log errors, device identifiers or file contents.
-        print("Tanılama başarısız: günlük dosyasını veya ADB bağlantısını kontrol edin.",
-              file=sys.stderr)
+        if args.from_file:
+            raw = Path(args.from_file).read_text(encoding="utf-8", errors="replace")
+            capture_mode = "EXISTING_LOCAL_FILE"
+        else:
+            raw, capture_mode = read_adb_log(args.max_lines)
+    except OSError:
+        print("Tanılama başarısız: LOCAL_FILE_UNREADABLE", file=sys.stderr)
+        return 1
+    except RuntimeError as exc:
+        # Only our own fixed messages appear; never print raw stderr/logcat.
+        print(f"Tanılama başarısız: {exc}", file=sys.stderr)
         return 1
     # Never print raw log lines, even when no patterns match.
     print(build_report(*summarize(raw)), end="")
+    print(f"Log capture mode: {capture_mode}")
     print(build_coverage_report(*scan_coverage(raw)), end="")
     return 0
 
