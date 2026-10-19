@@ -190,12 +190,24 @@ def build_coverage_report(coverage, first_time, last_time):
     return "\n".join(lines) + "\n"
 
 
-def query_adb_log(max_lines, timeout=55):
-    """Return raw log bytes to caller memory only; error messages are fixed enums."""
+def build_logcat_command(max_lines, focused=False):
+    """Read only, bounded logcat. Focused mode filters Android log TAGS."""
+    command = (
+        "adb", "logcat", "-d", "-b", "main", "-b", "system",
+        "-t", str(max_lines), "-v", "threadtime",
+    )
+    if focused:
+        # Tag-level filtering happens before the -t tail count.
+        # Finsky:background uses a separate tag and may be absent here.
+        command += ("-s", "Finsky:V", "PackageInstaller:V", "PackageManager:W")
+    return command
+
+
+def query_adb_log(max_lines, timeout=55, focused=False):
+    """Return raw log text to caller memory only; errors are fixed enums."""
     try:
         result = subprocess.run(
-            ("adb", "logcat", "-d", "-b", "main", "-b", "system",
-             "-t", str(max_lines), "-v", "threadtime"),
+            build_logcat_command(max_lines, focused=focused),
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=timeout, check=False,
         )
@@ -206,19 +218,22 @@ def query_adb_log(max_lines, timeout=55):
     except OSError as exc:
         raise RuntimeError("ADB_EXECUTION_FAILED") from exc
     if result.returncode:
-        # stderr can contain device IDs, file paths or environment details.
+        # stderr can contain device IDs or other private details.
         raise RuntimeError("ADB_COMMAND_FAILED")
     return result.stdout
 
 
-def read_adb_log(max_lines=3000):
-    """Use a bounded capture and a smaller fallback on transient ADB failures.
+def read_adb_log(max_lines=3000, focused=False):
+    """Use a bounded capture and smaller fallback on transient ADB failures.
 
-    Both attempts are read-only, and raw logs are never echoed, stored, or
-    uploaded by this tool. A fallback is explicitly labelled in the report.
+    Never writes, displays, uploads or clears raw logcat data.
     """
+    mode = "FOCUSED" if focused else "STANDARD"
     try:
-        return query_adb_log(max_lines), f"STANDARD ({max_lines} lines requested)"
+        return (
+            query_adb_log(max_lines, focused=focused),
+            f"{mode} ({max_lines} lines requested)",
+        )
     except RuntimeError as first:
         if str(first) in ("ADB_NOT_FOUND", "ADB_EXECUTION_FAILED"):
             raise
@@ -227,8 +242,8 @@ def read_adb_log(max_lines=3000):
             raise
         try:
             return (
-                query_adb_log(fallback_lines, timeout=25),
-                f"FALLBACK ({fallback_lines} lines requested after {first})",
+                query_adb_log(fallback_lines, timeout=25, focused=focused),
+                f"{mode} FALLBACK ({fallback_lines} lines requested after {first})",
             )
         except RuntimeError as second:
             raise RuntimeError(f"ADB_CAPTURE_FAILED ({first}; {second})") from second
@@ -240,6 +255,8 @@ def main():
                         help="Read an existing local log file instead of querying ADB")
     parser.add_argument("--max-lines", type=int, default=3000,
                         help="ADB logcat line limit (300..10000; default: 3000)")
+    parser.add_argument("--focused", action="store_true",
+                        help="Use a read-only tag filter for Finsky and Android package installer logs")
     args = parser.parse_args()
     if not 300 <= args.max_lines <= 10000:
         parser.error("--max-lines must be between 300 and 10000")
@@ -248,7 +265,7 @@ def main():
             raw = Path(args.from_file).read_text(encoding="utf-8", errors="replace")
             capture_mode = "EXISTING_LOCAL_FILE"
         else:
-            raw, capture_mode = read_adb_log(args.max_lines)
+            raw, capture_mode = read_adb_log(args.max_lines, focused=args.focused)
     except OSError:
         print("Tanılama başarısız: LOCAL_FILE_UNREADABLE", file=sys.stderr)
         return 1
