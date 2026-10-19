@@ -330,6 +330,64 @@ def summarize_playstore_crash_causes(raw):
     return results
 
 
+
+# Fixed allowlists: do not echo arbitrary exception strings or sensitive data.
+CRASH_PERMISSION_MARKERS = (
+    "MANAGE_USERS", "CREATE_USERS", "INTERACT_ACROSS_USERS",
+    "INTERACT_ACROSS_USERS_FULL", "GET_ACCOUNTS_PRIVILEGED",
+    "GET_ACCOUNTS", "MANAGE_ACCOUNTS", "AUTHENTICATE_ACCOUNTS",
+    "INSTALL_PACKAGES", "DELETE_PACKAGES", "REQUEST_INSTALL_PACKAGES",
+    "REQUEST_DELETE_PACKAGES", "QUERY_ALL_PACKAGES",
+    "READ_PRIVILEGED_PHONE_STATE", "WRITE_SECURE_SETTINGS",
+    "READ_PHONE_STATE", "PACKAGE_USAGE_STATS", "BIND_JOB_SERVICE",
+)
+CRASH_OPERATION_MARKERS = (
+    ("ACCOUNT_MANAGER", ("AccountManager", "IAccountManager", "accounts of type")),
+    ("USER_MANAGER", ("UserManager", "IUserManager", "UserHandle")),
+    ("PACKAGE_MANAGER", ("PackageManager", "IPackageManager", "PackageInstaller")),
+    ("CONTENT_PROVIDER", ("ContentProvider", "IContentProvider", "ContentResolver")),
+    ("ACTIVITY_OR_INTENT", ("ActivityTaskManager", "startActivity", "ActivityManager")),
+)
+
+
+def summarize_playstore_crash_security_context(raw):
+    """Report only fixed Android permission and framework-component labels.
+
+    Match one Play Store FATAL EXCEPTION block at a time. Never print a
+    SecurityException message, full stack frame, email or token.
+    A marker's presence is NOT proof that this permission caused the crash.
+    """
+    lines = raw.splitlines()
+    results = []
+    for idx, line in enumerate(lines):
+        if not re.search(r"\bProcess:\s*com\.android\.vending(?:\s|,|$)", line):
+            continue
+        if "FATAL EXCEPTION" not in "\n".join(lines[max(0, idx - 5):idx]):
+            continue
+        end = min(idx + 90, len(lines))
+        for j in range(idx + 1, end):
+            if "FATAL EXCEPTION" in lines[j] or re.search(r"\bProcess:\s*\S+", lines[j]):
+                end = j
+                break
+        block = "\n".join(lines[idx:end])
+        if "SecurityException" not in block:
+            continue
+        names = [
+            name for name in CRASH_PERMISSION_MARKERS
+            if re.search(r"\b" + re.escape(name) + r"\b", block)
+        ]
+        ops = [
+            category for category, tokens in CRASH_OPERATION_MARKERS
+            if any(t in block for t in tokens)
+        ]
+        stamp = STAMP.search(line)
+        results.append((
+            stamp.group(1) if stamp else "not available",
+            tuple(names), tuple(ops),
+        ))
+    return results
+
+
 def build_crash_report(raw, mode):
     events = summarize_playstore_crashes(raw)
     lines = [
@@ -345,9 +403,16 @@ def build_crash_report(raw, mode):
     lines.append("PLAY STORE CRASH CAUSE INDICATORS (heuristic; no root cause proven)")
     for timestamp, cause in causes[-5:]:
         lines.append(f"  {timestamp} | indicator: {cause}")
+    security = summarize_playstore_crash_security_context(raw)
+    lines.append("CRASH SECURITY CONTEXT (fixed known markers; not proof of cause)")
+    for timestamp, perms, ops in security[-5:]:
+        lines.append(
+            f"  {timestamp} | permissions: {','.join(perms) if perms else 'NO_KNOWN_MARKER'}"
+            f" | components: {','.join(ops) if ops else 'UNKNOWN'}"
+        )
     if causes:
         lines.append(
-            "These indicators are derived from known phrases in a crash block;"
+            "These indicators are derived from fixed markers in a crash block;"
             " they may be incomplete, especially when logcat is truncated."
         )
     if not events:
