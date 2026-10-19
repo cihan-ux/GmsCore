@@ -44,10 +44,23 @@ Windows'ta Python yüklüyse:
 py -3 tools/huawei_gms_diagnostics.py
 ~~~
 
-Telefon açıkken USB hata ayıklama iznini onaylayın. Bu kod yalnızca
-sabit sistem özelliklerini ve yüklü olduğu bilinen paketlerin sürüm
-bilgilerini **okur**. Google hesaplarının e-posta adresini, Android ID'yi,
-seri numarasını, logcat'i veya kimlik doğrulama tokenlarını toplamaz.
+Telefon açıkken USB hata ayıklama iznini onaylayın. Varsayılan
+çalıştırma yalnızca sistem özelliklerini, bilinen paketlerin sürümlerini
+ve UID'lerini okur; hesap kayıtlarına veya logcat'e erişmez.
+
+**İsteğe bağlı hesap türü kontrolü** (özellikle bu cihazdaki
+`app.revanced` / `com.google` sorununu tanılamak için):
+
+~~~sh
+python3 tools/huawei_gms_diagnostics.py --account-types
+~~~
+
+Bu seçenek Android'in `dumpsys account` çıktısını bellekte **okur**.
+Ham çıktı Google hesaplarının e-posta adreslerini içerebilir fakat
+uygulama yalnızca `com.google` ve `app.revanced` hesap türü
+adlarını rapora yazar. Hesap adreslerini, parolaları, tokenları ve
+ham dökümü diske kaydetmez veya ekrana basmaz. Hesap türünün
+`NOT SEEN` olması yokluğu kanıtlamaz; Android çıktısı sınırlı olabilir.
 Verileri internete göndermez. İsterseniz yerel metin dosyası:
 
 ~~~sh
@@ -72,8 +85,20 @@ farklı UID'ler ve hesap türleri arasındaki erişimi kısıtlayabilir;
 bu değerleri yalnızca manifest'e eklemek ayrıcalık kazandırmaz.
 
 - `SecurityException: uid ... cannot get user data for accounts of type: app.revanced`
-  hatası, Google hesabının belirli bir uygulama tarafından erişilememesi
-  ile ilgilidir. Bu, tek başına bozuk hesabı veya yanlış parolayı kanıtlamaz.
+  hatası, Android 10 `AccountManagerService.getUserData()` çağrısında
+  **hesap türünü yönetme yetkisi kontrolünün** başarısız olmasıdır.
+  `getUserData()` için yalnızca görünür hesap veya `GET_ACCOUNTS_PRIVILEGED`
+  talep etmek yeterli değildir. Bu, bozuk hesabı veya yanlış parolayı kanıtlamaz.
+  AOSP kanıtı: https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android10-mainline-release/services/core/java/com/android/server/accounts/AccountManagerService.java
+- Huawei'de gözlemlenen durum: Play Store `com.android.vending` UID `10279`,
+  microG-RE `app.revanced.android.gms` UID `10260`, GmsCore-hw
+  `com.google.android.gms` UID `10283`. Android'de `app.revanced`
+  hesap kaydı ve her iki hesap doğrulayıcı türü bulunuyor; `com.google`
+  türünde hesap ise önceki metin tabanlı kontrolünde görülmedi.
+  Bu, yalnızca cihazın o anki kurulumuna ilişkin bir bulgudur.
+- `com.google` hesap türüne sahip yeni bir hesap oluşturmayı, mevcut
+  hesabı taşımayı veya microG-RE'yi kaldırmayı önermiyoruz. Farklı
+  authenticator imzaları ve mevcut oturumlar korunmalıdır.
 - `MANAGE_USERS or CREATE_USERS permission` hatası, uygulamanın
   Android'in korumalı sistem işlemini gerçekleştiremediğini gösterir.
   Root'suz, imzasız bir APK ile ayrıcalık otomatik kazanılmaz.
