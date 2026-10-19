@@ -33,6 +33,31 @@ Root olmayan bir uygulama üretici kodu alınabileceğini, üretici yetkisini ve
 fastboot'un bir kilit açma isteğini kabul edeceğini doğrulayamaz. AQM-L21A için
 üçüncü taraf yöntemlerle kesin kilit açılabilirlik iddiası yoktur.
 
+## v1.1: İsteğe bağlı Fastboot çıktısı karşılaştırması
+
+Cihazdaki salt okunur sistem özelliği kontrolüne ek olarak ayrı bir **manuel
+Fastboot metni** alanı bulunur. PC'de daha önce `fastboot oem get-bootinfo`
+ile aldığınız çıktıyı (ör. `(bootloader) locked`) yapıştırıp
+**Yapıştırılan Çıktıyı Değerlendir** düğmesine basabilirsiniz.
+
+- `(bootloader) locked`, `(bootloader) unlocked`, `Lock State: ...`,
+  `FB LockState: ...` ve `unlocked: yes/no` gibi **açık durum satırları**
+  değerlendirilir; `FRP LockState`, `FAILED`, `Command not allowed`,
+  OEM izin sinyali ve genel serbest metinler kilit kanıtı olarak alınmaz.
+- Manuel sonuç **cihazdan okunan sonuçtan ayrı** tutulur. Çatışırlarsa
+  uyuşmazlık bildirilir, otomatik kilit durumu değiştirilmez.
+- Girdi sınırlıdır (12.000 karakter); ham yapıştırma metni cihaz kimliği
+  içerebileceğinden **kopyalanan rapora alınmaz**. Yalnızca sınıflandırma
+  ve açıklaması raporda yer alır.
+- Metin düzenlendiğinde önceki sınıflandırma geçersizleşir; yeniden
+  değerlendirmek gerekir. Yeni otomatik tarama yapıldığında manuel
+  karşılaştırma da yeniden onay gerektirir.
+- Fastboot çıktısının gerçek cihazdan geldiği doğrulanamaz. Bu özellik
+  **bootloader açılabilirliğini** tespit etmez, kilit açma işlemi yapmaz,
+  root veya yeni bir sistem izni istemez.
+- **Yalnızca kilit durumu içindir:** `get_unlock_ability` sinyali,
+  üretici kodu / yetkilendirme veya başarı garantisi olarak kullanılmaz.
+
 ## Gizlilik ve güvenlik
 
 - Root, internet veya ayrıcalıklı Android izni istemez; Google servisleri gerekmez.
