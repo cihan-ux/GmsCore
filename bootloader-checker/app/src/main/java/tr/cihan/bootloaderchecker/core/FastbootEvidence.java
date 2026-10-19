@@ -124,13 +124,13 @@ public final class FastbootEvidence {
     }
 
     public String report(Assessment assessment) {
-        return "MANUEL FASTBOOT ÇIKTISI DEĞERLENDİRMESİ\\n"
-                + "Durum: " + title() + "\\n"
-                + "Tanınan durum satırı sayısı: " + recognizedLines + "\\n"
-                + explanation() + "\\n"
-                + compare(assessment) + "\\n"
+        return "MANUEL FASTBOOT ÇIKTISI DEĞERLENDİRMESİ\n"
+                + "Durum: " + title() + "\n"
+                + "Tanınan durum satırı sayısı: " + recognizedLines + "\n"
+                + explanation() + "\n"
+                + compare(assessment) + "\n"
                 + "Bu veri kullanıcı tarafından yapıştırılmıştır; orijinal cihaz çıktısı "
                 + "olduğu doğrulanamaz. Ham metin rapora eklenmez. Kilit açılabilirliği, "
-                + "üretici yetkisi veya kod bulunabilirliği hakkında karar verdirmez.\\n";
+                + "üretici yetkisi veya kod bulunabilirliği hakkında karar verdirmez.\n";
     }
 }
