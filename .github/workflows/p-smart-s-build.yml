@@ -45,6 +45,12 @@ jobs:
       - name: Test safe ADB diagnostics without any connected device
         run: python3 -m unittest discover -s tools -p 'test_huawei_gms_diagnostics.py'
 
+      - name: Set up Android SDK command-line tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+
       - name: Ensure Android SDK tools are installed
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
 
