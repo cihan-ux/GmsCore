@@ -287,6 +287,49 @@ def summarize_playstore_crashes(raw):
     return found
 
 
+
+def summarize_playstore_crash_causes(raw):
+    """Return high-level *indicators*, not unredacted crash stack traces.
+
+    Parse each Play Store crash block separately, stopping before another
+    FATAL EXCEPTION or a Process header, to avoid attributing other apps'
+    errors to Play Store. Labels are fixed, never raw exception messages.
+    """
+    lines = raw.splitlines()
+    results = []
+    for idx, line in enumerate(lines):
+        if not re.search(r"\bProcess:\s*com\.android\.vending(?:\s|,|$)", line):
+            continue
+        if "FATAL EXCEPTION" not in "\n".join(lines[max(0, idx - 5):idx]):
+            continue
+        end = min(idx + 90, len(lines))
+        for j in range(idx + 1, end):
+            if "FATAL EXCEPTION" in lines[j] or re.search(r"\bProcess:\s*\S+", lines[j]):
+                end = j
+                break
+        block = "\n".join(lines[idx:end])
+        if ACCOUNT_DENIAL.search(block):
+            cause = "ACCOUNT_PRIVATE_USERDATA_DENIED"
+        elif USER_PRIVILEGE.search(block):
+            cause = "PROTECTED_USER_MANAGEMENT_PERMISSION"
+        elif ("SecurityException" in block and
+              "AccountManager.getUserData" in block):
+            cause = "ACCOUNT_USERDATA_SECURITY_EXCEPTION"
+        elif "SecurityException" in block:
+            cause = "OTHER_SECURITY_EXCEPTION"
+        elif "NoClassDefFoundError" in block or "ClassNotFoundException" in block:
+            cause = "CLASS_LOADING_FAILURE"
+        elif "NullPointerException" in block:
+            cause = "NULL_POINTER_EXCEPTION"
+        elif "RuntimeException" in block:
+            cause = "OTHER_RUNTIME_EXCEPTION"
+        else:
+            cause = "UNKNOWN"
+        stamp = STAMP.search(line)
+        results.append((stamp.group(1) if stamp else "not available", cause))
+    return results
+
+
 def build_crash_report(raw, mode):
     events = summarize_playstore_crashes(raw)
     lines = [
@@ -298,6 +341,15 @@ def build_crash_report(raw, mode):
     ]
     for timestamp, kind in events[-5:]:
         lines.append(f"  Play Store crash: {timestamp} | exception category: {kind}")
+    causes = summarize_playstore_crash_causes(raw)
+    lines.append("PLAY STORE CRASH CAUSE INDICATORS (heuristic; no root cause proven)")
+    for timestamp, cause in causes[-5:]:
+        lines.append(f"  {timestamp} | indicator: {cause}")
+    if causes:
+        lines.append(
+            "These indicators are derived from known phrases in a crash block;"
+            " they may be incomplete, especially when logcat is truncated."
+        )
     if not events:
         lines.append(
             "No matching crash seen in available buffer."
