@@ -7,7 +7,8 @@ import subprocess
 from huawei_playstore_errors import (
     summarize, build_report, classify, scan_coverage, build_coverage_report,
     build_logcat_command, read_adb_log,
-    summarize_playstore_crashes, build_crash_report, read_crash_buffer,
+    summarize_playstore_crashes, summarize_playstore_crash_causes,
+    build_crash_report, read_crash_buffer,
 )
 
 
@@ -233,6 +234,64 @@ class PlayStoreErrorSummaryTests(unittest.TestCase):
         report = build_crash_report(data, mode)
         self.assertIn("SecurityException", report)
         self.assertNotIn("private@example.com", report)
+
+
+
+    def test_nested_runtime_error_identifies_account_denial_indicator(self):
+        raw = (
+            "10-19 23:36:16.100 E/AndroidRuntime(20): FATAL EXCEPTION: main\n"
+            "10-19 23:36:16.101 E/AndroidRuntime(20): Process: com.android.vending, PID: 20\n"
+            "10-19 23:36:16.102 E/AndroidRuntime(20): java.lang.RuntimeException: private@example.com\n"
+            "10-19 23:36:16.103 E/AndroidRuntime(20):   at x.y.z(Unknown:12)\n"
+            "10-19 23:36:16.104 E/AndroidRuntime(20): Caused by: java.lang.SecurityException: "
+            "uid 10279 cannot get user data for accounts of type: app.revanced "
+            "token=ya29.secret\n"
+        )
+        events = summarize_playstore_crash_causes(raw)
+        self.assertEqual([("10-19 23:36:16", "ACCOUNT_PRIVATE_USERDATA_DENIED")], events)
+        report = build_crash_report(raw, "STANDARD")
+        self.assertIn("ACCOUNT_PRIVATE_USERDATA_DENIED", report)
+        for secret in ("private@", "ya29", "10279"):
+            self.assertNotIn(secret, report)
+
+    def test_protected_user_management_different_from_account_data(self):
+        raw = (
+            "10-19 23:36:16.100 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:36:16.101 E/AndroidRuntime: Process: com.android.vending, PID: 55\n"
+            "10-19 23:36:16.102 E/AndroidRuntime: java.lang.SecurityException: "
+            "MANAGE_USERS or CREATE_USERS permission\n"
+        )
+        self.assertEqual(
+            [("10-19 23:36:16", "PROTECTED_USER_MANAGEMENT_PERMISSION")],
+            summarize_playstore_crash_causes(raw)
+        )
+
+    def test_nearby_other_process_cause_not_misattributed(self):
+        raw = (
+            "10-19 23:32:01.001 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:32:01.002 E/AndroidRuntime: Process: com.android.vending, PID: 4\n"
+            "10-19 23:32:01.003 E/AndroidRuntime: java.lang.RuntimeException\n"
+            "10-19 23:32:02.001 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:32:02.002 E/AndroidRuntime: Process: another.app, PID: 5\n"
+            "10-19 23:32:02.003 E/AndroidRuntime: java.lang.SecurityException: "
+            "uid 5 cannot get user data for accounts of type: app.revanced\n"
+        )
+        self.assertEqual(
+            [("10-19 23:32:01", "OTHER_RUNTIME_EXCEPTION")],
+            summarize_playstore_crash_causes(raw)
+        )
+
+    def test_unknown_crash_indicator_no_raw_text(self):
+        raw = (
+            "10-19 23:32:01.001 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:32:01.002 E/AndroidRuntime: Process: com.android.vending, PID: 4\n"
+            "10-19 23:32:01.003 E/AndroidRuntime: vendor.custom.Fatal: "
+            "private.person@example.com and ya29.SECRET\n"
+        )
+        report = build_crash_report(raw, "STANDARD")
+        self.assertIn("indicator: UNKNOWN", report)
+        self.assertNotIn("private.person", report)
+        self.assertNotIn("ya29", report)
 
 
 
