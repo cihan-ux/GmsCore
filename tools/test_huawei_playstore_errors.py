@@ -9,6 +9,7 @@ from huawei_playstore_errors import (
     build_logcat_command, read_adb_log,
     summarize_playstore_crashes, summarize_playstore_crash_causes,
     build_crash_report, read_crash_buffer,
+    summarize_playstore_crash_security_context,
 )
 
 
@@ -292,6 +293,66 @@ class PlayStoreErrorSummaryTests(unittest.TestCase):
         self.assertIn("indicator: UNKNOWN", report)
         self.assertNotIn("private.person", report)
         self.assertNotIn("ya29", report)
+
+
+
+    def test_security_permission_markers_are_known_only(self):
+        raw = (
+            "10-19 23:53:20.001 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:53:20.002 E/AndroidRuntime: Process: com.android.vending, PID: 10279\n"
+            "10-19 23:53:20.003 E/AndroidRuntime: java.lang.RuntimeException\n"
+            "10-19 23:53:20.004 E/AndroidRuntime: Caused by: java.lang.SecurityException: "
+            "requires android.permission.INTERACT_ACROSS_USERS "
+            "and random.private.email@example.com ya29.some_auth_token\n"
+            "10-19 23:53:20.005 E/AndroidRuntime: at android.os.UserManager.getUsers\n"
+        )
+        items = summarize_playstore_crash_security_context(raw)
+        self.assertEqual(
+            [("10-19 23:53:20", ("INTERACT_ACROSS_USERS",), ("USER_MANAGER",))],
+            items,
+        )
+        rendered = build_crash_report(raw, "STANDARD")
+        self.assertIn("permissions: INTERACT_ACROSS_USERS", rendered)
+        self.assertIn("components: USER_MANAGER", rendered)
+        for secret in ("random.private", "example.com", "ya29", "10279"):
+            self.assertNotIn(secret, rendered)
+
+    def test_unrecognized_security_message_not_echoed(self):
+        raw = (
+            "10-19 23:53:26.001 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:53:26.002 E/AndroidRuntime: Process: com.android.vending, PID: 10279\n"
+            "10-19 23:53:26.003 E/AndroidRuntime: java.lang.SecurityException: "
+            "secret custom vendor operation with token=ya29.KEEP_PRIVATE\n"
+        )
+        report = build_crash_report(raw, "STANDARD")
+        self.assertIn("permissions: NO_KNOWN_MARKER | components: UNKNOWN", report)
+        self.assertNotIn("ya29", report)
+        self.assertNotIn("secret custom", report)
+
+    def test_unrelated_app_permissions_are_never_reported(self):
+        raw = (
+            "10-19 23:53:20.001 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:53:20.002 E/AndroidRuntime: Process: com.android.vending, PID: 20\n"
+            "10-19 23:53:20.003 E/AndroidRuntime: java.lang.RuntimeException\n"
+            "10-19 23:53:21.001 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:53:21.002 E/AndroidRuntime: Process: vendor.other, PID: 21\n"
+            "10-19 23:53:21.003 E/AndroidRuntime: java.lang.SecurityException: "
+            "MANAGE_USERS permission required in AccountManager\n"
+        )
+        self.assertEqual([], summarize_playstore_crash_security_context(raw))
+        self.assertNotIn("MANAGE_USERS", build_crash_report(raw, "STANDARD"))
+
+    def test_account_manager_context_from_google_login_crash(self):
+        raw = (
+            "10-19 23:53:30.001 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:53:30.002 E/AndroidRuntime: Process: com.android.vending, PID: 999\n"
+            "10-19 23:53:30.003 E/AndroidRuntime: java.lang.SecurityException: "
+            "uid cannot get user data for accounts of type: app.revanced\n"
+            "10-19 23:53:30.004 E/AndroidRuntime: at android.accounts.AccountManager.getUserData\n"
+        )
+        r = build_crash_report(raw, "STANDARD")
+        self.assertIn("ACCOUNT_PRIVATE_USERDATA_DENIED", r)
+        self.assertIn("components: ACCOUNT_MANAGER", r)
 
 
 
