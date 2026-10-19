@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Offline fixtures for the sanitized Huawei Play Store log analyzer."""
 import unittest
+from unittest.mock import patch
+import subprocess
 
 from huawei_playstore_errors import (
     summarize, build_report, classify, scan_coverage, build_coverage_report,
+    build_logcat_command, read_adb_log,
 )
 
 
@@ -123,6 +126,57 @@ class PlayStoreErrorSummaryTests(unittest.TestCase):
         self.assertIn("Finsky-tagged lines: 1", sanitized)
         for data in ("my.name", "example.com", "ya29", "token=", "/data/user/"):
             self.assertNotIn(data, sanitized)
+
+
+    def test_focused_command_filters_tags_before_tail_count(self):
+        command = build_logcat_command(3000, focused=True)
+        self.assertEqual(command[:3], ("adb", "logcat", "-d"))
+        self.assertIn("-s", command)
+        self.assertIn("Finsky:V", command)
+        self.assertIn("PackageInstaller:V", command)
+        self.assertIn("PackageManager:W", command)
+        self.assertEqual(command[command.index("-t") + 1], "3000")
+        self.assertNotIn("-c", command)
+        self.assertNotIn("clear", command)
+        self.assertNotIn("--pid", command)
+
+    def test_standard_command_does_not_filter_tags(self):
+        command = build_logcat_command(3000, focused=False)
+        self.assertNotIn("-s", command)
+        self.assertEqual(command[command.index("-t") + 1], "3000")
+
+    @patch("huawei_playstore_errors.subprocess.run")
+    def test_focused_query_stays_redacted_and_read_only(self, fake_run):
+        fake_run.return_value = subprocess.CompletedProcess(
+            args=(), returncode=0,
+            stdout="10-19 23:25:01.000 E/Finsky: Failed to fetch user data from account manager.\n"
+                   "Account {name=private.user@example.com, type=app.revanced}\n",
+            stderr="",
+        )
+        raw, mode = read_adb_log(3000, focused=True)
+        self.assertIn("FOCUSED", mode)
+        command = fake_run.call_args.args[0]
+        self.assertIn("Finsky:V", command)
+        self.assertEqual(fake_run.call_args.kwargs["capture_output"], True)
+        report = build_report(*summarize(raw))
+        self.assertNotIn("private.user", report)
+        self.assertIn("PLAY_STORE_ACCOUNT_METADATA_FETCH_FAILED: 1", report)
+
+    @patch("huawei_playstore_errors.subprocess.run")
+    def test_focused_fallback_preserves_tag_filter(self, fake_run):
+        fake_run.side_effect = [
+            subprocess.TimeoutExpired(cmd="adb", timeout=55),
+            subprocess.CompletedProcess(args=(), returncode=0, stdout="", stderr=""),
+        ]
+        raw, mode = read_adb_log(3000, focused=True)
+        self.assertEqual(raw, "")
+        self.assertIn("FOCUSED FALLBACK", mode)
+        self.assertEqual(fake_run.call_count, 2)
+        for call in fake_run.call_args_list:
+            self.assertIn("Finsky:V", call.args[0])
+            self.assertNotIn("-c", call.args[0])
+        fallback_command = fake_run.call_args_list[1].args[0]
+        self.assertEqual(fallback_command[fallback_command.index("-t")+1], "300")
 
 
 
