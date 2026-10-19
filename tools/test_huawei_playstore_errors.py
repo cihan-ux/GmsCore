@@ -7,6 +7,7 @@ import subprocess
 from huawei_playstore_errors import (
     summarize, build_report, classify, scan_coverage, build_coverage_report,
     build_logcat_command, read_adb_log,
+    summarize_playstore_crashes, build_crash_report, read_crash_buffer,
 )
 
 
@@ -177,6 +178,61 @@ class PlayStoreErrorSummaryTests(unittest.TestCase):
             self.assertNotIn("-c", call.args[0])
         fallback_command = fake_run.call_args_list[1].args[0]
         self.assertEqual(fallback_command[fallback_command.index("-t")+1], "300")
+
+
+
+    def test_real_play_store_crash_only(self):
+        raw = (
+            "10-19 23:35:10.000 E/AndroidRuntime(1540): FATAL EXCEPTION: main\n"
+            "10-19 23:35:10.001 E/AndroidRuntime(1540): Process: com.android.vending, PID: 1540\n"
+            "10-19 23:35:10.002 E/AndroidRuntime(1540): java.lang.IllegalStateException: "
+            "name=private.person@example.com token=ya29.secret\n"
+            "10-19 23:36:10.000 E/AndroidRuntime(1800): FATAL EXCEPTION: main\n"
+            "10-19 23:36:10.001 E/AndroidRuntime(1800): Process: other.app, PID: 1800\n"
+            "10-19 23:36:10.002 E/AndroidRuntime(1800): java.lang.NullPointerException\n"
+        )
+        events = summarize_playstore_crashes(raw)
+        self.assertEqual([("10-19 23:35:10", "IllegalStateException")], events)
+        report = build_crash_report(raw, "STANDARD")
+        self.assertIn("com.android.vending: 1", report)
+        self.assertNotIn("private.person", report)
+        self.assertNotIn("ya29", report)
+        self.assertNotIn("1540", report)
+
+    def test_unrelated_crashes_not_counted(self):
+        raw = (
+            "10-19 23:35:10.000 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+            "10-19 23:35:10.001 E/AndroidRuntime: Process: com.google.android.gms, PID: 33\n"
+            "10-19 23:35:10.002 E/AndroidRuntime: com.android.vending was mentioned\n"
+        )
+        self.assertEqual([], summarize_playstore_crashes(raw))
+
+    def test_nonfatal_play_store_error_not_called_crash(self):
+        raw = "10-19 23:35:00.000 E/Finsky: failed to fetch account metadata\n"
+        self.assertEqual([], summarize_playstore_crashes(raw))
+        report = build_crash_report(raw, "STANDARD")
+        self.assertIn("FATAL EXCEPTION events belonging to com.android.vending: 0", report)
+        self.assertIn("does not rule out", report)
+
+    @patch("huawei_playstore_errors.subprocess.run")
+    def test_crash_buffer_adb_read_is_privacy_limited(self, fake_run):
+        fake_run.return_value = subprocess.CompletedProcess(
+            args=(), returncode=0,
+            stdout="10-19 23:35:00.000 E/AndroidRuntime: FATAL EXCEPTION: main\n"
+                   "10-19 23:35:00.001 E/AndroidRuntime: Process: com.android.vending, PID: 19\n"
+                   "10-19 23:35:00.002 E/AndroidRuntime: java.lang.SecurityException: "
+                   "email=private@example.com\n",
+            stderr="",
+        )
+        data, mode = read_crash_buffer()
+        args = fake_run.call_args.args[0]
+        self.assertEqual(args[:3], ("adb", "logcat", "-d"))
+        self.assertEqual(args[args.index("-b") + 1], "crash")
+        self.assertNotIn("-c", args)
+        self.assertEqual(fake_run.call_args.kwargs["capture_output"], True)
+        report = build_crash_report(data, mode)
+        self.assertIn("SecurityException", report)
+        self.assertNotIn("private@example.com", report)
 
 
 
