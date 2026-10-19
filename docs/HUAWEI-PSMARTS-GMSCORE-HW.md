@@ -83,10 +83,23 @@ python3 -m unittest discover -s tools -p 'test_huawei_*.py'
 deneyin. Ardından Linux Mint'te **salt okunur** tarayıcıyı çalıştırın:
 
 ~~~sh
-python3 tools/huawei_playstore_errors.py
+python3 tools/huawei_playstore_errors.py --focused
 ~~~
 
-Araç Android'in `adb logcat -d` komutuyla son 20.000 kayıt satırını
+**Önerilen yol:** Play Store'da daha önce yüklenmemiş ücretsiz bir
+uygulamayı indirmeyi denedikten hemen sonra `--focused` kullanın. Bu
+seçenek `Finsky`, `PackageInstaller` ve `PackageManager` log tag'lerini
+seçerek diğer uygulamaların günlüklerini çoğunlukla dışarıda bırakır.
+`Finsky:background` ayrı bir tag olduğundan bu seçenekte görünmeyebilir.
+Uygulama kendi kendini güncellerken alınan günlükler başka bir
+uygulamanın indirilme/kurulum sorunuyla karıştırılmamalıdır.
+
+Geniş tarama yapmak gerekiyorsa `--focused` olmadan da çalıştırılabilir.
+Varsayılan satır sınırı artık 3000'dir (isteğe bağlı `--max-lines 10000`).
+Yeni `LOG COVERAGE` bölümü kaydedilmiş zaman aralığını ve ilgili tag
+sayılarını gösterir; hiç görünmemeleri Play Store'un sağlam olduğunu kanıtlamaz.
+
+Araç Android'in `adb logcat -d` komutuyla sınırlı kayıtları
 belleğe alır. **Logları temizlemez**, yüklü uygulamalara dokunmaz.
 Yalnızca önceden tanımlanmış hata kategorilerinin sayı ve zamanını
 raporlar; ham kayıtları, Google hesaplarını, e-postaları, Google
