@@ -1,0 +1,23 @@
+name: Huawei rootless account compatibility lab
+on:
+  push:
+    branches: [huawei-rootless-account-compat]
+    paths:
+      - 'tools/huawei_google_login_preflight.py'
+      - 'tools/test_huawei_google_login_preflight.py'
+      - 'docs/HUAWEI-ROOTLESS-GSF-ACCOUNT-LAB.md'
+      - '.github/workflows/huawei-rootless-account-lab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run read-only preflight parser tests
+        run: python3 -m unittest discover -s tools -p 'test_huawei_google_login_preflight.py' -v
