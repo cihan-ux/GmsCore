@@ -1,0 +1,26 @@
+/*
+ * Experimental login-only packaging test for Huawei P Smart S.
+ * Keeps Java/Kotlin namespace and implementation intact while changing
+ * the installable Android applicationId.
+ *
+ * WARNING: This is still the full GmsCore, NOT a true isolated authenticator.
+ * Do not install alongside the official Google Play services until provider
+ * authorities and other shared identifiers are separated.
+ */
+android {
+    productFlavors {
+        huaweiLogin {
+            dimension 'target'
+            applicationId 'com.google.android.gmt'
+            versionNameSuffix '-hw-gmt'
+            matchingFallbacks = ['huawei', 'default']
+            manifestPlaceholders = [appLabel: '@string/gms_app_name']
+            resValue 'string', 'package_id', 'com.google.android.gmt'
+        }
+    }
+    sourceSets {
+        huaweiLogin {
+            manifest.srcFile 'src/huawei/AndroidManifest.xml'
+        }
+    }
+}
