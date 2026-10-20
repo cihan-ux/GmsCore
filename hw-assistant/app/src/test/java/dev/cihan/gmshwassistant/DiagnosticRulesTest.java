@@ -26,6 +26,22 @@ public class DiagnosticRulesTest {
     @Test public void permissionIsNotPresentedAsSufficient() {
         assertTrue(DiagnosticRules.protectedPermission(true, true).contains("kaniti degil"));
     }
+    @Test public void requestedPrivilegedPermissionDoesNotClaimAdbFix() {
+        assertTrue(DiagnosticRules.permissionState(true, false, "android.permission.MANAGE_USERS")
+                .contains("normal ADB ile verilemez"));
+    }
+    @Test public void unrequestedPermissionIsNotFlaggedMissing() {
+        assertTrue(DiagnosticRules.permissionState(false, false, "android.permission.MANAGE_USERS")
+                .contains("eksik izin olarak yorumlanamaz"));
+    }
+    @Test public void developmentPermissionDoesNotPromiseSuccess() {
+        assertTrue(DiagnosticRules.permissionState(true, false, "android.permission.INTERACT_ACROSS_USERS")
+                .contains("denenebilir"));
+    }
+    @Test public void grantedPermissionDoesNotClaimWorkingPlayStore() {
+        assertTrue(DiagnosticRules.permissionState(true, true, "android.permission.MANAGE_USERS")
+                .contains("kaniti degil"));
+    }
     @Test public void accountsAreNotInferredFromAuthenticator() {
         assertTrue(DiagnosticRules.accountType(true).contains("kanitlamaz"));
     }

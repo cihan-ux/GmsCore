@@ -1,8 +1,8 @@
-name: GmsCore HW Assistant - APK
+name: Huawei GMS Diagnostics - Android APK
 
 on:
   push:
-    branches: [gmscore-hw-assistant-v1]
+    branches: [huawei-gms-diagnostics-v2]
     paths:
       - 'hw-assistant/**'
       - '.github/workflows/gmscore-hw-assistant.yml'
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-assistant:
-    name: Unit tests and signed Android 10 APK
+    name: Unit tests and signed Android debug APK
     runs-on: ubuntu-24.04
     timeout-minutes: 35
 
@@ -55,20 +55,20 @@ jobs:
           test -f "$apk"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" \
             | grep -q "^package: name='dev.cihan.gmshwassistant'"
-          cp "$apk" dist/GmsCore-HW-Assistant-v1-DEBUG.apk
+          cp "$apk" dist/Huawei-GMS-Diagnostics-v2-DEBUG.apk
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
-            dist/GmsCore-HW-Assistant-v1-DEBUG.apk > dist/SIGNATURE.txt
-          (cd dist && sha256sum GmsCore-HW-Assistant-v1-DEBUG.apk > SHA256SUMS.txt)
+            dist/Huawei-GMS-Diagnostics-v2-DEBUG.apk > dist/SIGNATURE.txt
+          (cd dist && sha256sum Huawei-GMS-Diagnostics-v2-DEBUG.apk > SHA256SUMS.txt)
           (cd dist && sha256sum -c SHA256SUMS.txt)
-          echo '## GmsCore HW Assistant v1.0' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Huawei GMS Diagnostics v2.0' >> "$GITHUB_STEP_SUMMARY"
           echo '- APK package: dev.cihan.gmshwassistant (independent from GmsCore)' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Android 10+; no network, accounts, root or log permissions' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Android 8+; no network, accounts, root or log permissions' >> "$GITHUB_STEP_SUMMARY"
           echo '- Unit tests passed and APK cryptographic signature verified' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GmsCore-HW-Assistant-v1-DEBUG
+          name: Huawei-GMS-Diagnostics-v2-DEBUG
           path: dist/*
           if-no-files-found: error
           retention-days: 21

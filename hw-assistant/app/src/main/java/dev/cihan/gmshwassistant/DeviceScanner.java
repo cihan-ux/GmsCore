@@ -45,7 +45,9 @@ public final class DeviceScanner {
         "org.microg.gms",
         "com.android.vending",
         "com.google.android.gsf",
-        "com.huawei.appmarket"
+        "com.google.android.gmt",
+        "com.huawei.appmarket",
+        "com.huawei.signature.diff"
     };
 
     private DeviceScanner() {}
@@ -54,7 +56,7 @@ public final class DeviceScanner {
         PackageManager pm = context.getPackageManager();
         Scan scan = new Scan();
         StringBuilder report = new StringBuilder();
-        report.append("GmsCore HW Assistant 1.0 | Yerel tani raporu\n");
+        report.append("Huawei GMS Diagnostics 2.0 | Yerel tani raporu\n");
         report.append("Salt okunur; e-posta, hesap adi, token, Android ID, ham log yok.\n\n");
 
         String manufacturer = safe(Build.MANUFACTURER);
@@ -67,7 +69,7 @@ public final class DeviceScanner {
 
         boolean playStore = false;
         boolean morphe = false;
-        boolean huawei = false;
+        boolean googleServices = false;
         for (String pkg : PACKAGE_NAMES) {
             PackageInfo info = packageInfo(pm, pkg);
             if (info == null) {
@@ -77,7 +79,7 @@ public final class DeviceScanner {
             scan.installedPackages++;
             if ("com.android.vending".equals(pkg)) playStore = true;
             if ("app.revanced.android.gms".equals(pkg)) morphe = true;
-            if ("com.google.android.gms".equals(pkg)) huawei = true;
+            if ("com.google.android.gms".equals(pkg)) googleServices = true;
             String certificate = certificateSha256(info);
             String signatureNote = "app.revanced.android.gms".equals(pkg)
                     ? "\nReferans: " + DiagnosticRules.signatureLabel(pkg, certificate)
@@ -88,7 +90,7 @@ public final class DeviceScanner {
                     "\nAPK imzasi SHA-256: " + certificate + signatureNote, OK);
         }
 
-        if (morphe && huawei) {
+        if (morphe && googleServices) {
             add(scan, report, "Iki farkli microG/GMS paketi",
                     "com.google.android.gms ve app.revanced.android.gms birlikte goruldu. " +
                     "Farkli kimliklerdir; hesap ve Play Store uyumu dogrulanmadi.", CAUTION);
@@ -98,29 +100,46 @@ public final class DeviceScanner {
                     "Google imzasi taklidinin etkin oldugu anlamina gelmez.", INFO);
         }
 
-        if (playStore) {
-            for (String permission : new String[] {
-                    "android.permission.INTERACT_ACROSS_USERS",
-                    "android.permission.MANAGE_USERS",
-                    "android.permission.CREATE_USERS"
-            }) {
-                boolean granted;
-                try {
-                    granted = pm.checkPermission(permission, "com.android.vending")
-                            == PackageManager.PERMISSION_GRANTED;
-                } catch (RuntimeException ignored) {
-                    add(scan, report, permission, "Izin sorgusu Android tarafindan engellendi", INFO);
-                    continue;
-                }
-                String shortName = permission.substring(permission.lastIndexOf('.') + 1);
-                add(scan, report, "Play Store: " + shortName,
-                        DiagnosticRules.protectedPermission(true, granted) +
-                        "\nBeyan/izin durumu crash nedenini tek basina kanitlamaz.",
-                        granted ? INFO : CAUTION);
+
+        // Permission state is a static capability check, not an inference from logcat.
+        // Report each relevant APK independently: GSF, GMS and Play Store differ.
+        final String[][] relevantPermissions = {
+            {"com.google.android.gsf", "android.permission.MANAGE_USERS"},
+            {"com.google.android.gsf", "android.permission.INTERACT_ACROSS_USERS"},
+            {"com.google.android.gms", "android.permission.MANAGE_USERS"},
+            {"com.google.android.gms", "android.permission.INTERACT_ACROSS_USERS"},
+            {"com.android.vending", "com.google.android.providers.gsf.permission.READ_GSERVICES"},
+            {"com.android.vending", "com.google.android.providers.gsf.permission.WRITE_GSERVICES"},
+            {"com.android.vending", "android.permission.INTERACT_ACROSS_USERS"},
+            {"com.android.vending", "android.permission.MANAGE_USERS"}
+        };
+        for (String[] item : relevantPermissions) {
+            PackageInfo targetInfo = packageInfo(pm, item[0]);
+            if (targetInfo == null) continue;
+            String shortName = item[1].substring(item[1].lastIndexOf('.') + 1);
+            boolean requested = hasPermissionRequest(targetInfo, item[1]);
+            boolean granted;
+            try {
+                granted = pm.checkPermission(item[1], item[0]) == PackageManager.PERMISSION_GRANTED;
+            } catch (RuntimeException ignored) {
+                add(scan, report, item[0] + ": " + shortName,
+                        "Android izin durumu sorgusunu engelledi; kesin sonuc yok.", INFO);
+                continue;
             }
-        } else {
-            add(scan, report, "Play Store izinleri",
-                    DiagnosticRules.protectedPermission(false, false), INFO);
+            String conclusion = DiagnosticRules.permissionState(requested, granted, item[1]);
+            add(scan, report, item[0] + ": " + shortName, conclusion,
+                    requested && !granted ? CAUTION : INFO);
+        }
+
+        if (playStore && packageInfo(pm, "com.google.android.gsf") == null) {
+            add(scan, report, "Play Store / GSF",
+                    "Play Store gorunuyor ama GSF paketi gorunmuyor. Kurulum veya gorunurluk kisitlarini arastirin.", CAUTION);
+        }
+        if (googleServices && packageInfo(pm, "com.google.android.gsf") != null) {
+            add(scan, report, "Korumali sistem yetkileri",
+                    "GSF ve GMS normal APK olarak kuruluysa sistem imzasi gerektiren "
+                    + "MANAGE_USERS izni ADB pm grant ile verilemez. "
+                    + "Bu islevsellik veya crash analizi degil, statik uyumluluk uyarisidir.", INFO);
         }
 
         boolean serviceSeen = false;
@@ -137,14 +156,20 @@ public final class DeviceScanner {
         try {
             boolean googleAuth = false;
             boolean revancedAuth = false;
+            String googleProvider = "Gorunmedi";
             AuthenticatorDescription[] authenticators =
                     AccountManager.get(context).getAuthenticatorTypes();
             for (AuthenticatorDescription authenticator : authenticators) {
-                if ("com.google".equals(authenticator.type)) googleAuth = true;
+                if ("com.google".equals(authenticator.type)) {
+                    googleAuth = true;
+                    googleProvider = safe(authenticator.packageName);
+                }
                 if ("app.revanced".equals(authenticator.type)) revancedAuth = true;
             }
             add(scan, report, "Google hesap dogrulayicisi (com.google)",
                     DiagnosticRules.accountType(googleAuth), INFO);
+            add(scan, report, "Google hesap saglayici paketi",
+                    "Gorunen kayit: " + googleProvider + "\nKayit bulunmasi girisin calistigini kanitlamaz.", INFO);
             add(scan, report, "Morphe hesap dogrulayicisi (app.revanced)",
                     DiagnosticRules.accountType(revancedAuth), INFO);
         } catch (SecurityException e) {
@@ -155,10 +180,16 @@ public final class DeviceScanner {
                     "Bu sistemde dogrulayici turleri sorgulanamadi.", INFO);
         }
 
+        add(scan, report, "ADB ile ek tani",
+                "Ayrintili GSF/GMS crash analizi telefon uzerinden yapilamaz. " +
+                "Linux Mint bilgisayarinizda GmsCore deposundaki " +
+                "tools/huawei_playstore_errors.py ve tools/huawei_gms_diagnostics.py araclarini " +
+                "yalnizca kendi cihazinizda calistirin. Loglari paylasmadan once " +
+                "e-posta, hesap kimlikleri ve tokenlari ayiklayin.", INFO);
         add(scan, report, "Sinirlar",
-                "Korunmus Android izinleri verilemez. Play Store'un ham crash kayitlari " +
-                "uygulama icinden okunamaz. Imza/servis/hesap dogrulayicisi gorunmesi " +
-                "Google Play calisiyor demek degildir.", INFO);
+                "Uygulama sistem izinlerini degistirmez, spoofing'i acmaz veya "
+                + "Google hesabina erisemez. Ucuncu taraf logcat, cihazdan okunamaz. "
+                + "Gorunen paket, izin ve hesap kaydi Play Store'un calistigini kanitlamaz.", INFO);
         scan.report = report.toString();
         return scan;
     }
@@ -171,10 +202,19 @@ public final class DeviceScanner {
                 .append("] ").append(title).append("\n").append(detail).append("\n\n");
     }
 
+    private static boolean hasPermissionRequest(PackageInfo info, String name) {
+        if (info.requestedPermissions == null) return false;
+        for (String requested : info.requestedPermissions) {
+            if (name.equals(requested)) return true;
+        }
+        return false;
+    }
+
     private static PackageInfo packageInfo(PackageManager pm, String pkg) {
         try {
             int flag = Build.VERSION.SDK_INT >= 28
-                    ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+                    ? (PackageManager.GET_SIGNING_CERTIFICATES | PackageManager.GET_PERMISSIONS)
+                    : (PackageManager.GET_SIGNATURES | PackageManager.GET_PERMISSIONS);
             return pm.getPackageInfo(pkg, flag);
         } catch (PackageManager.NameNotFoundException ignored) {
             return null;

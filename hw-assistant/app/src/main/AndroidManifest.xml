@@ -7,6 +7,8 @@
         <package android:name="org.microg.gms" />
         <package android:name="com.android.vending" />
         <package android:name="com.google.android.gsf" />
+        <package android:name="com.google.android.gmt" />
+        <package android:name="com.huawei.signature.diff" />
         <package android:name="com.huawei.appmarket" />
         <intent>
             <action android:name="com.huawei.signature.diff" />
@@ -14,7 +16,7 @@
     </queries>
     <application
         android:allowBackup="false"
-        android:label="GmsCore HW Assistant"
+        android:label="Huawei GMS Diagnostics"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity

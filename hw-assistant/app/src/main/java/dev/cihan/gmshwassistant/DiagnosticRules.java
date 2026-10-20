@@ -19,6 +19,17 @@ public final class DiagnosticRules {
         return "Diger / tanimlanmamis sertifika";
     }
 
+    /** Permission request, OS grant and system restriction are separate facts. */
+    public static String permissionState(boolean requested, boolean granted, String permission) {
+        if (!requested) return "APK bu izni talep etmiyor; eksik izin olarak yorumlanamaz.";
+        if (granted) return "Izin verilmis; calisma ve uyumluluk kaniti degil.";
+        if ("android.permission.MANAGE_USERS".equals(permission))
+            return "Izin istenmis ama VERILMEMIS. signature|privileged; normal ADB ile verilemez.";
+        if ("android.permission.INTERACT_ACROSS_USERS".equals(permission))
+            return "Izin istenmis ama VERILMEMIS. Bazi Android surumlerinde development grant denenebilir; burada degistirilmez.";
+        return "Izin istenmis ama VERILMEMIS. GMS/GSF ve APK uyumlulugunu inceleyin.";
+    }
+
     public static String protectedPermission(boolean installed, boolean granted) {
         if (!installed) return "Play Store bulunamadi";
         return granted ? "Izin verilmis (islevsellik kaniti degil)" :

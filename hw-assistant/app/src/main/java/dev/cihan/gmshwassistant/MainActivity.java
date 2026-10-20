@@ -45,9 +45,9 @@ public final class MainActivity extends Activity {
         root.setPadding(dp(20), dp(28), dp(20), dp(32));
         scroller.addView(root);
 
-        addText(root, "GMSCORE  /  HUAWEI", 12, ACCENT, true, 0);
-        addText(root, "HW Assistant", 30, WHITE, true, 7);
-        addText(root, "v1.0  ·  Yerel tanilama  ·  Root gerekmez", 13, MUTED, false, 5);
+        addText(root, "CIHAN-UX  /  ANDROID DIAGNOSTICS", 12, ACCENT, true, 0);
+        addText(root, "Huawei GMS Diagnostics", 27, WHITE, true, 7);
+        addText(root, "v2.0  ·  Salt okunur  ·  Root / GMS gerekmez", 13, MUTED, false, 5);
 
         LinearLayout hero = card(root, 20, 14);
         addText(hero, "Cihaz tanilama raporu", 20, WHITE, true, 0);
@@ -62,6 +62,12 @@ public final class MainActivity extends Activity {
         root.addView(actions);
         action(actions, "Yeniden tara", ACCENT, BG, () -> refresh(), 1);
         action(actions, "Raporu paylas", CARD, WHITE, () -> shareReport(), 1);
+
+        LinearLayout exportActions = new LinearLayout(this);
+        exportActions.setOrientation(LinearLayout.HORIZONTAL);
+        root.addView(exportActions);
+        action(exportActions, "Kopyala", CARD, WHITE, () -> copyReport(), 1);
+        action(exportActions, "TXT kaydet", CARD, WHITE, () -> saveReport(), 1);
 
         addText(root, "KONTROLLER", 12, MUTED, true, 6);
         for (DeviceScanner.Finding finding : lastScan.findings) {
@@ -82,10 +88,15 @@ public final class MainActivity extends Activity {
         addText(root, "HIZLI ERISIM", 12, MUTED, true, 18);
         action(root, "Play Store uygulama bilgisi",
                 CARD, WHITE, () -> openAppDetails("com.android.vending"), 0);
-        action(root, "Morphe microG uygulama bilgisi",
+        action(root, "Google Play Hizmetleri (GMS) bilgisi",
+                CARD, WHITE, () -> openAppDetails("com.google.android.gms"), 0);
+        action(root, "Google Services Framework (GSF) bilgisi",
+                CARD, WHITE, () -> openAppDetails("com.google.android.gsf"), 0);
+        action(root, "ReVanced microG uygulama bilgisi",
                 CARD, WHITE, () -> openAppDetails("app.revanced.android.gms"), 0);
-        addText(root, "Gizlilik: E-posta, hesap adi, token, cihaz kimligi ve logcat alinmaz. " +
-                "Rapor yalnizca sen paylasirsan cihazdan cikar.", 12, MUTED, false, 21);
+        addText(root, "Gizlilik: E-posta, hesap adi, token, Android ID ve logcat okunmaz. "
+                + "Izinler sadece sorgulanir. Rapor sen kopyalar, kaydeder veya paylasirsan cihazdan cikar.",
+                12, MUTED, false, 21);
 
         setContentView(scroller);
     }
@@ -94,9 +105,42 @@ public final class MainActivity extends Activity {
         if (lastScan == null || lastScan.report == null) return;
         Intent send = new Intent(Intent.ACTION_SEND);
         send.setType("text/plain");
-        send.putExtra(Intent.EXTRA_SUBJECT, "GmsCore HW Assistant raporu");
+        send.putExtra(Intent.EXTRA_SUBJECT, "Huawei GMS Diagnostics v2.0 raporu");
         send.putExtra(Intent.EXTRA_TEXT, lastScan.report);
         startActivity(Intent.createChooser(send, "Tanilama raporunu paylas"));
+    }
+
+    private void copyReport() {
+        if (lastScan == null || lastScan.report == null) return;
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        clipboard.setPrimaryClip(ClipData.newPlainText("GMS tani raporu", lastScan.report));
+        Toast.makeText(this, "Rapor panoya kopyalandi", Toast.LENGTH_SHORT).show();
+    }
+
+    private static final int REQUEST_SAVE_TXT = 27;
+    private void saveReport() {
+        if (lastScan == null) return;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_TITLE, "huawei-gms-diagnostics.txt");
+        try { startActivityForResult(intent, REQUEST_SAVE_TXT); }
+        catch (RuntimeException ignored) {
+            Toast.makeText(this, "Dosya kaydetme ekrani acilamadi", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_SAVE_TXT || resultCode != RESULT_OK || data == null
+                || data.getData() == null || lastScan == null) return;
+        try (java.io.OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+            if (out == null) throw new java.io.IOException("Dosya acilamadi");
+            out.write(lastScan.report.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            Toast.makeText(this, "Tani raporu kaydedildi", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Rapor kaydedilemedi", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void openAppDetails(String pkg) {
