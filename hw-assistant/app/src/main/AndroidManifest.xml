@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Queries are visibility hints, not Android privileges. -->
+    <queries>
+        <package android:name="com.google.android.gms" />
+        <package android:name="app.revanced.android.gms" />
+        <package android:name="org.microg.gms" />
+        <package android:name="com.android.vending" />
+        <package android:name="com.google.android.gsf" />
+        <package android:name="com.huawei.appmarket" />
+        <intent>
+            <action android:name="com.huawei.signature.diff" />
+        </intent>
+    </queries>
+    <application
+        android:allowBackup="false"
+        android:label="GmsCore HW Assistant"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:usesCleartextTraffic="false">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
