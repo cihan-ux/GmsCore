@@ -1,0 +1,12 @@
+// Google sign-in modernization build based on upstream microG GmsCore.
+// Keep the original cloned application's package ID to make the replacement
+// identifiable while avoiding changes to the ordinary Huawei build on master.
+android {
+    productFlavors {
+        huawei {
+            applicationId 'com.google.android.gmt'
+            resValue 'string', 'package_id', 'com.google.android.gmt'
+            manifestPlaceholders.appLabel = 'microG Google Login (GMT)'
+        }
+    }
+}
