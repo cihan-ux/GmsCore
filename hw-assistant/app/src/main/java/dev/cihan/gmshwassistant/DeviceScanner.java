@@ -60,8 +60,7 @@ public final class DeviceScanner {
         String manufacturer = safe(Build.MANUFACTURER);
         String model = safe(Build.MODEL);
         String android = safe(Build.VERSION.RELEASE);
-        String emui = safe(android.os.Build.VERSION.SDK_INT >= 26
-                ? getEmuiVersion() : "Bilgi yok");
+        String emui = safe(getEmuiVersion());
         add(scan, report, "Cihaz",
                 manufacturer + " " + model + "\nAndroid " + android +
                 " (API " + Build.VERSION.SDK_INT + ")\nEMUI: " + emui, INFO);
