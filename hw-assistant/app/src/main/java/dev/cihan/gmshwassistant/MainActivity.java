@@ -47,7 +47,7 @@ public final class MainActivity extends Activity {
 
         addText(root, "CIHAN-UX  /  ANDROID DIAGNOSTICS", 12, ACCENT, true, 0);
         addText(root, "Huawei GMS Diagnostics", 27, WHITE, true, 7);
-        addText(root, "v2.0  ·  Salt okunur  ·  Root / GMS gerekmez", 13, MUTED, false, 5);
+        addText(root, "v2.0.1  ·  Salt okunur  ·  Root / GMS gerekmez", 13, MUTED, false, 5);
 
         LinearLayout hero = card(root, 20, 14);
         addText(hero, "Cihaz tanilama raporu", 20, WHITE, true, 0);

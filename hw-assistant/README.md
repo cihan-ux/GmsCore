@@ -1,4 +1,4 @@
-# Huawei GMS Diagnostics v2.0
+# Huawei GMS Diagnostics v2.0.1
 
 Huawei/EMUI, microG/GmsCore, original Google Play Services, Google Services Framework (GSF) and Play Store package compatibility diagnostics.
 
@@ -13,11 +13,11 @@ Package ID: `dev.cihan.gmshwassistant` (upgrades our earlier HW Assistant v1 app
 - GSF and GMS: requested versus granted `MANAGE_USERS` and `INTERACT_ACROSS_USERS`
 - Play Store: requested versus granted `READ_GSERVICES`, `WRITE_GSERVICES` and protected user-management permissions
 - Google and app.revanced authenticator **type/owner only** (never emails or account names)
-- Huawei signature diff service *visibility* (not evidence that signature spoofing is enabled)
+- Huawei signature diff intent **provider package identity** (for example microG-HW's own com.google.android.gms; **not** proof of firmware integration or working spoofing)
 - Scan again, copy report, share via Android chooser or save locally as TXT
 - Open app details to inspect OS-provided package screens
 
-**Limits:** Android prevents third-party apps from reading other packages' crash logcat. A visible authenticator does not prove a Google account can log in. A missing package may also reflect visibility restrictions. These checks cannot grant protected permissions, alter signatures or make original Play Store work.
+**Important for EMUI 12:** microG-HW itself can expose a service matching the `com.huawei.signature.diff` intent. Even when visible, this does not imply Huawei firmware calls it. Earlier GSF `MANAGE_USERS` crash logs from different package versions should not be applied automatically to the current stub GSF.\n\n**Limits:** Android prevents third-party apps from reading other packages' crash logcat. A visible authenticator does not prove a Google account can log in. A missing package may also reflect visibility restrictions. These checks cannot grant protected permissions, alter signatures or make original Play Store work.
 
 For detailed ADB crash triage, on your trusted Linux Mint workstation use existing scripts:
 - [tools/huawei_gms_diagnostics.py](../tools/huawei_gms_diagnostics.py)

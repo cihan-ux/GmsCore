@@ -36,6 +36,18 @@ public final class DiagnosticRules {
                 "Izin verilmemis (root'suz uygulama bu izni veremez)";
     }
 
+    /** The resolving service may be bundled in microG-HW itself, not Huawei firmware. */
+    public static String signatureServiceOrigin(String owner) {
+        if (owner == null || owner.isEmpty())
+            return "Servis sahibi gorunmedi; bu, firmware desteginin yoklugunu kanitlamaz.";
+        if ("com.google.android.gms".equals(owner))
+            return "Saglayici: " + owner + " (microG-HW/GMS paketi). "
+                    + "microG'nin servisi gorunuyor; EMUI'nin bunu kullandigi veya "
+                    + "imza taklidinin CALISTIGI dogrulanmadi.";
+        return "Saglayici: " + owner + ". Servisin varligi tek basina "
+                + "EMUI imza taklidi destegini kanitlamaz.";
+    }
+
     public static String spoofingService(boolean visible) {
         return visible
                 ? "Huawei SignatureService gorunuyor; gercek spoofing destegi DOGRULANMADI"

@@ -42,6 +42,17 @@ public class DiagnosticRulesTest {
         assertTrue(DiagnosticRules.permissionState(true, true, "android.permission.MANAGE_USERS")
                 .contains("kaniti degil"));
     }
+    @Test public void microgHostedServiceIsNotFirmwareProof() {
+        String text = DiagnosticRules.signatureServiceOrigin("com.google.android.gms");
+        assertTrue(text.contains("microG"));
+        assertTrue(text.contains("dogrulanmadi"));
+    }
+    @Test public void missingServiceIsNotNoFirmwareSupport() {
+        assertTrue(DiagnosticRules.signatureServiceOrigin(null).contains("kanitlamaz"));
+    }
+    @Test public void unknownProviderIsNotProofEither() {
+        assertTrue(DiagnosticRules.signatureServiceOrigin("com.vendor.fake").contains("kanitlamaz"));
+    }
     @Test public void accountsAreNotInferredFromAuthenticator() {
         assertTrue(DiagnosticRules.accountType(true).contains("kanitlamaz"));
     }

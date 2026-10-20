@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1 (development)
+
+- Identify which package owns the Huawei signature diff intent service
+- Distinguish microG-HW's self-declared service from Huawei firmware integration
+- Avoid claiming the old GSF MANAGE_USERS crash affects the newly installed stub GSF
+- Add three unit tests for spoofing-service attribution
+
 ## 2.0.0 (development)
 
 - New branding: Huawei GMS Diagnostics

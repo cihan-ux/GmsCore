@@ -135,23 +135,35 @@ public final class DeviceScanner {
             add(scan, report, "Play Store / GSF",
                     "Play Store gorunuyor ama GSF paketi gorunmuyor. Kurulum veya gorunurluk kisitlarini arastirin.", CAUTION);
         }
-        if (googleServices && packageInfo(pm, "com.google.android.gsf") != null) {
-            add(scan, report, "Korumali sistem yetkileri",
-                    "GSF ve GMS normal APK olarak kuruluysa sistem imzasi gerektiren "
-                    + "MANAGE_USERS izni ADB pm grant ile verilemez. "
-                    + "Bu islevsellik veya crash analizi degil, statik uyumluluk uyarisidir.", INFO);
+        PackageInfo currentGsf = packageInfo(pm, "com.google.android.gsf");
+        if (currentGsf != null && !hasPermissionRequest(currentGsf, "android.permission.MANAGE_USERS")) {
+            add(scan, report, "Mevcut GSF / eski crash farki",
+                    "Mevcut GSF APK'si MANAGE_USERS iznini ISTEMIYOR. "
+                    + "Eski GSF surumunun MANAGE_USERS crash kaydi bu kurulumda "
+                    + "otomatik olarak gecerli sayilamaz. Yeni crash icin ADB logcat kullanin.", INFO);
         }
 
+        // Huawei action visibility alone is not proof of firmware integration.
+        // microG-HW itself declares com.huawei.signature.diff.SignatureService.
         boolean serviceSeen = false;
+        String serviceOwner = null;
         try {
             Intent intent = new Intent("com.huawei.signature.diff");
             List<ResolveInfo> services = pm.queryIntentServices(intent, 0);
-            serviceSeen = services != null && !services.isEmpty();
+            if (services != null) {
+                for (ResolveInfo service : services) {
+                    if (service.serviceInfo != null) {
+                        serviceSeen = true;
+                        serviceOwner = service.serviceInfo.packageName;
+                        break;
+                    }
+                }
+            }
         } catch (RuntimeException ignored) {
-            // A missing result may indicate OS visibility restrictions, not missing support.
+            // A missing result may indicate Android visibility restrictions.
         }
-        add(scan, report, "Huawei SignatureService",
-                DiagnosticRules.spoofingService(serviceSeen), INFO);
+        add(scan, report, "Huawei SignatureService / saglayici",
+                DiagnosticRules.signatureServiceOrigin(serviceSeen ? serviceOwner : null), INFO);
 
         try {
             boolean googleAuth = false;
