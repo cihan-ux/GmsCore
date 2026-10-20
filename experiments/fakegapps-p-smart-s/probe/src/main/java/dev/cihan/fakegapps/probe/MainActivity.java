@@ -19,7 +19,8 @@ public final class MainActivity extends Activity {
         text.setPadding(24, 24, 24, 24);
         text.setText("FakeGApps P Smart S — PROBE ONLY\n"
             + "Android API: " + Build.VERSION.SDK_INT + "\n"
-            + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\n\n"
+            + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\n"
+            + probeHookStatus() + "\n\n"
             + inspect("com.google.android.gms")
             + "\n\n" + inspect("com.android.vending")
             + "\n\nThis screen shows ONLY what this app receives via PackageManager. "
@@ -27,6 +28,19 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.addView(text);
         setContentView(scroll);
+    }
+
+    private String probeHookStatus() {
+        try {
+            String version = getPackageManager()
+                .getPackageInfo(getPackageName(), 0).versionName;
+            if (version != null && version.endsWith("-hook-active")) {
+                return "LOCAL XPOSED HOOK: ACTIVE (PROBE PROCESS ONLY)";
+            }
+            return "LOCAL XPOSED HOOK: NOT DETECTED";
+        } catch (Exception e) {
+            return "LOCAL XPOSED HOOK: UNKNOWN (" + e.getClass().getSimpleName() + ")";
+        }
     }
 
     private String inspect(String target) {

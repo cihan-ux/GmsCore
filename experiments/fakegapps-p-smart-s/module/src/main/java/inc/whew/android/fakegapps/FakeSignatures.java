@@ -44,6 +44,14 @@ public class FakeSignatures implements IXposedHookLoadPackage {
                 PackageInfo pi = (PackageInfo) param.getResult();
                 if (pi != null) {
                     String packageName = pi.packageName;
+                    // Observable canary: modifies only the PROBE's local package-info result.
+                    // It does NOT change Android's stored package version or package signatures.
+                    if (packageName.equals("dev.cihan.fakegapps.probe")) {
+                        pi.versionName = (pi.versionName == null ? "" : pi.versionName)
+                            + "-hook-active";
+                        param.setResult(pi);
+                        return;
+                    }
                     if (packageName.equals("com.google.android.gms") || packageName.equals("com.android.vending")) {
                         pi.signatures = new Signature[]{new Signature(certBytes)};
 

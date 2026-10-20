@@ -20,7 +20,7 @@ This is a distinct, experimental GPLv3 adaptation of [FakeGApps 6.6](https://git
 * On Android 10, `SigningInfo` is constructed with non-SDK reflection, so this path **may fail** even if the legacy `signatures` field changes. Errors go to Xposed logs.
 * **LSPatch repacks and re-signs patched APKs**. Only patch the throwaway `probe` APK; do not patch or uninstall `com.google.android.gms`, `com.android.vending`, or user apps. This project does not alter existing Google account data.
 * A missing GMS package is reported as missing; no reinstall/restore is attempted.
-* Tested status: **source prepared, NOT device-tested or build-verified yet**. Do not mark the experiment successful without before/after fingerprints and logs.
+* Tested status: **v0.2 source updated, NOT device-tested; CI build status must be checked**. Do not mark the experiment successful without before/after fingerprints and logs.
 
 ## Project layout
 
@@ -47,8 +47,8 @@ Outputs:
 1. Check that ADB + Shizuku run. No root, no bootloader operations.
 2. `adb install probe/build/outputs/apk/debug/probe-debug.apk` and launch **P Smart S Signature Probe**. Save baseline GMS/Play Store hashes (the GMS package may be missing).
 3. Install `module-debug.apk`, a **separate** Xposed module from original FakeGApps 6.6.
-4. In LSPatch, patch **only the probe APK** in Manager mode and enable **FakeGApps P Smart S Edition** in the probe's module scope. Do not patch any Google package. Installation may require removing the **probe only** because LSPatch changes its signature; no accounts are associated with the probe.
-5. Open the patched probe and record its fingerprints. Read logcat with `adb logcat -d -s Xposed:* | grep -i 'PSmartS\|FakeGApps'` (logs may not be visible on every build).
+4. Probe v0.2 displays **LOCAL XPOSED HOOK: NOT DETECTED** before patching. In LSPatch, patch **only the probe APK** in Manager mode and enable **FakeGApps P Smart S Edition** in the probe's module scope. Do not patch any Google package. Installation may require removing the **probe only** because LSPatch changes its signature; no accounts are associated with the probe.
+5. Open the patched probe and check **LOCAL XPOSED HOOK: ACTIVE (PROBE PROCESS ONLY)**. This is a deliberate, visible canary: the Xposed module changes only the local probe's reported own `versionName` (adds `-hook-active`), proving the module ran in the probe process even if GMS/Play Store APKs already have Google signature fingerprints. If the indicator stays **NOT DETECTED**, module loading is not verified; check scope, LSPatch local vs manager mode and logs. Record fingerprints separately. Read logcat with `adb logcat -d -s Xposed:* | grep -i 'PSmartS\|FakeGApps'` (logs may not be visible on every build).
 6. Compare before/after. Local hash change => app-process hook demonstrated; it **does not** prove system spoofing. No hash change => inspect scope, load timing, errors.
 7. If desired, uninstall **only the probe and this edition's module**. Leave real microG-HW and Play Store untouched.
 
@@ -57,3 +57,9 @@ Outputs:
 This module is based on FakeGApps 6.6 by its upstream contributors and carries the **GNU GPL v3**. This modification was prepared on 2026-10-20. Refer to [LICENSE](LICENSE) and [upstream project](https://github.com/whew-inc/FakeGApps).
 
 This is a research experiment, not an endorsed Google, Huawei, microG, Xposed or LSPosed application.
+
+## v0.2: Why the visible hook canary was added
+
+On this P Smart S, `apksigner` reported `com.google.android.gms` **and** `com.android.vending` actually signed with the SHA-256 fingerprint `f0fd6c5b410f25cb25c3b53346c8972fae30f8ee7411df910480ad6b2d60db83`, matching the prior probe view, even with the module disabled. Therefore matching fingerprint values **cannot** establish whether the module loaded. 
+
+The canary is a local, in-memory probe-only `PackageInfo.versionName` suffix. Never use the canary for claims about system-wide signature spoofing, Play Protect or Google account support.
