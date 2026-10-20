@@ -1,0 +1,83 @@
+name: P Smart S - experimental GMT login package
+
+on:
+  push:
+    branches:
+      - experiment/gmt-login
+    paths:
+      - 'play-services-core/user.gradle'
+      - '.github/workflows/gmt-login-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-gmt-login:
+    name: Build and verify GMT debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+
+    steps:
+      - name: Checkout experimental branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle setup
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install SDK platform and tools
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Build signed debug APK
+        run: |
+          chmod +x ./gradlew
+          touch local.properties
+          ./gradlew :play-services-core:assembleHmsHuaweiLoginDebug --no-daemon --max-workers=2
+
+      - name: Verify package and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          apk="$(find play-services-core/build/outputs/apk/hmsHuaweiLogin/debug -maxdepth 1 -name '*.apk' -type f -print -quit)"
+          test -n "$apk"
+          "$tools/aapt" dump badging "$apk" | tee /tmp/gmt-badging.txt
+          grep -q "name='com.google.android.gmt'" /tmp/gmt-badging.txt
+          mkdir -p dist
+          cp "$apk" dist/GmsCore-hw-GMT-LOGIN-EXPERIMENT-SIGNED-DEBUG.apk
+          "$tools/apksigner" verify --verbose --print-certs dist/GmsCore-hw-GMT-LOGIN-EXPERIMENT-SIGNED-DEBUG.apk > dist/SIGNATURE.txt
+          (cd dist && sha256sum GmsCore-hw-GMT-LOGIN-EXPERIMENT-SIGNED-DEBUG.apk > SHA256SUMS.txt)
+          {
+            echo '## Experimental GMT login APK'
+            echo
+            echo '- Android applicationId: com.google.android.gmt'
+            echo '- Huawei-flavor manifest settings included'
+            echo '- Signed DEBUG only; signature may differ between builds'
+            echo '- This is NOT a finished standalone authenticator'
+            echo '- Do NOT install together with official Google Play services: shared provider authorities may conflict'
+            echo '- Replacing old RenzDagz requires separate backup/uninstall decisions'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSmartS-GMT-Login-Test-${{ github.run_number }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
