@@ -1,0 +1,42 @@
+name: Build GMT Google Login APK
+
+on:
+  push:
+    branches:
+      - gmt-google-login-update
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build modern microG-HW, com.google.android.gmt
+        run: |
+          chmod +x gradlew
+          touch local.properties
+          ./gradlew :play-services-core:assembleHmsHuaweiDebug --no-daemon --max-workers=2 --stacktrace
+      - name: Verify and checksum
+        run: |
+          find play-services-core/build/outputs/apk/hmsHuawei/debug -type f -name '*.apk' -print -exec sha256sum {} \;
+      - name: Upload signed debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GMT-Google-Login-Updated-APK
+          path: play-services-core/build/outputs/apk/hmsHuawei/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
