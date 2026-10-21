@@ -82,7 +82,7 @@ public class MainActivity extends Activity {
         out.append("RESULT: ").append(!gmsReadable ? "INCONCLUSIVE" : gmsMatched ? "GOOGLE SIGNATURE VISIBLE TO INSPECTOR" : "GOOGLE SIGNATURE NOT VISIBLE TO INSPECTOR").append("\n");
         out.append("Important: APK on-disk signer is NOT measured here; use the existing opt-in apksigner diagnostics for that.\n");
         out.append("No root, internet, accounts, or device identifiers accessed.\n");
-        report = out.toString().replace("\n", "\n");
+        report = out.toString();
         view.setText(report);
     }
     private static String digest(byte[] bytes, String algorithm) throws Exception {
