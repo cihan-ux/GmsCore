@@ -47,7 +47,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
     @Override
     public Bundle editProperties(AccountAuthenticatorResponse response, String accountType) {
-        Log.d(TAG, "editProperties: " + accountType);
+        Log.d(TAG, "editProperties");
         throw new UnsupportedOperationException();
     }
 
@@ -72,7 +72,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
     @Override
     public Bundle confirmCredentials(AccountAuthenticatorResponse response, Account account, Bundle options) throws NetworkErrorException {
-        Log.d(TAG, "confirmCredentials: " + account + ", " + options);
+        Log.d(TAG, "confirmCredentials");
         final Bundle result = new Bundle();
         result.putBoolean(AccountManager.KEY_BOOLEAN_RESULT, true);
         return result;
@@ -102,7 +102,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
     @Override
     public Bundle getAuthToken(AccountAuthenticatorResponse response, Account account, String authTokenType, Bundle options) throws NetworkErrorException {
         options.keySet();
-        Log.d(TAG, "getAuthToken: " + account + ", " + authTokenType + ", " + options);
+        Log.d(TAG, "getAuthToken requested");
         String app = options.getString(KEY_ANDROID_PACKAGE_NAME);
         app = PackageUtils.getAndCheckPackage(context, app, options.getInt(KEY_CALLER_UID), options.getInt(KEY_CALLER_PID));
         AuthManager authManager;
@@ -142,7 +142,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
         try {
             AuthResponse res = requestAuthForAccountManager(authManager, account, true);
             if (res.auth != null) {
-                Log.d(TAG, "getAuthToken: " + res.auth);
+                Log.d(TAG, "getAuthToken completed");
                 Bundle result = new Bundle();
                 result.putString(KEY_ACCOUNT_TYPE, account.type);
                 result.putString(KEY_ACCOUNT_NAME, account.name);
@@ -161,16 +161,16 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
                     if (res.consentDataBase64 != null)
                         i.putExtra(AskPermissionActivity.EXTRA_CONSENT_DATA, Base64.decode(res.consentDataBase64, Base64.URL_SAFE));
                 } catch (Exception e) {
-                    Log.w(TAG, "Can't decode consent data: ", e);
+                    Log.w(TAG, "Cannot decode consent data");
                 }
                 result.putParcelable(KEY_INTENT, i);
                 return result;
             }
         } catch (ReauthenticationRequiredException e) {
-            Log.w(TAG, "Re-authentication required for account " + account.name, e);
+            Log.w(TAG, "Re-authentication required");
             return createReAuthIntentResult(response, account, options);
         } catch (Exception e) {
-            Log.w(TAG, e);
+            Log.w(TAG, "Authentication request failed");
             throw new NetworkErrorException(e);
         }
     }
@@ -219,13 +219,13 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
     @Override
     public String getAuthTokenLabel(String authTokenType) {
-        Log.d(TAG, "getAuthTokenLabel: " + authTokenType);
+        Log.d(TAG, "getAuthTokenLabel");
         return null;
     }
 
     @Override
     public Bundle hasFeatures(AccountAuthenticatorResponse response, Account account, String[] features) throws NetworkErrorException {
-        Log.d(TAG, "hasFeatures: " + account + ", " + Arrays.toString(features));
+        Log.d(TAG, "hasFeatures");
         AccountManager accountManager = AccountManager.get(context);
         String services = accountManager.getUserData(account, "services");
         boolean res = true;
@@ -233,10 +233,10 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
             List<String> servicesList = Arrays.asList(services.split(","));
             for (String feature : features) {
                 if (feature.startsWith("service_") && !servicesList.contains(feature.substring(8))) {
-                    Log.d(TAG, "Feature " + feature + " not supported");
+                    Log.d(TAG, "Requested feature not supported");
                     res = false;
                 } else if (!feature.startsWith("service_") && !servicesList.contains(feature)) {
-                    Log.d(TAG, "Feature " + feature + " not supported");
+                    Log.d(TAG, "Requested feature not supported");
                     res = false;
                 }
             }
@@ -250,7 +250,7 @@ public class AccountAuthenticator extends AbstractAccountAuthenticator {
 
     @Override
     public Bundle updateCredentials(AccountAuthenticatorResponse response, Account account, String authTokenType, Bundle options) throws NetworkErrorException {
-        Log.d(TAG, "updateCredentials: " + account + ", " + authTokenType + ", " + options);
+        Log.d(TAG, "updateCredentials");
         return null;
     }
 }

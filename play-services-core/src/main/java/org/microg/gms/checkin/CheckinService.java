@@ -81,7 +81,7 @@ public class CheckinService extends IntentService {
             if (CheckinPreferences.isEnabled(this)) {
                 LastCheckinInfo info = CheckinManager.checkin(this, intent.getBooleanExtra(EXTRA_FORCE_CHECKIN, false));
                 if (info != null) {
-                    Log.d(TAG, "Checked in as " + Long.toHexString(info.getAndroidId()));
+                    Log.d(TAG, "Device registration succeeded");
                     String accountType = AuthConstants.DEFAULT_ACCOUNT_TYPE;
                     for (Account account : AccountManager.get(this).getAccountsByType(accountType)) {
                         PeopleManager.loadUserInfo(this, account);
@@ -98,7 +98,7 @@ public class CheckinService extends IntentService {
                 }
             }
         } catch (Exception e) {
-            Log.w(TAG, e);
+            Log.w(TAG, "Device registration failed");
         } finally {
             if (intent != null) {
                 WakefulBroadcastReceiver.completeWakefulIntent(intent);

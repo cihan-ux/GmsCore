@@ -59,7 +59,7 @@ public class CheckinClient {
         connection.setRequestProperty("Accept-Encoding", "gzip");
         connection.setRequestProperty("User-Agent", "Android-Checkin/2.0 (vbox86p JLS36G); gzip");
 
-        Log.d(TAG, "-- Request --\n" + request);
+        Log.d(TAG, "Sending device registration request");
         OutputStream os = new GZIPOutputStream(connection.getOutputStream());
         os.write(request.encode());
         os.close();
