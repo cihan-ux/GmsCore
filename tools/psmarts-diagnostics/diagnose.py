@@ -146,12 +146,12 @@ def _get_permission(runner, package, permission, user=0):
         return "unknown"
 
 
-def inspect_apks(runner, package, apksigner):
+def inspect_apks(runner, package, apksigner, user=0):
     """Opt-in local APK verification; pull reads device files and never installs."""
     if not apksigner:
         return {"status": "apksigner_unavailable"}
     try:
-        paths = runner("shell", "pm", "path", package).splitlines()
+        paths = runner("shell", "pm", "path", "--user", str(user), package).splitlines()
         paths = [line[len("package:"):] for line in paths if line.startswith("package:")]
         if not paths or any(not re.fullmatch(r"/(?:data/app|system|product|vendor|odm|oem|system_ext)/[A-Za-z0-9_./=+@~\-]+\.apk", p) for p in paths):
             return {"status": "unavailable_or_unsupported_path"}
@@ -212,7 +212,7 @@ def snapshot(runner=adb, include_logcat=True, user=0, inspect=False, apksigner=N
             if package == PACKAGES[0]:
                 gms_dump = raw
             if inspect:
-                info["apk_verification"] = inspect_apks(runner, package, apksigner)
+                info["apk_verification"] = inspect_apks(runner, package, apksigner, user)
         packages[package] = info
     play = PACKAGES[1]
     packages[play]["install_permissions_effective"] = {

@@ -249,6 +249,23 @@ class DiagnosticTests(unittest.TestCase):
         self.assertFalse(any(p.exists() for p in destinations))
         self.assert_private(report)
 
+    def test_apk_verification_uses_selected_user_and_preserves_failure(self):
+        commands = []
+        def runner(*args):
+            commands.append(args)
+            if args[:3] == ("shell", "pm", "path"):
+                return "package:/data/app/example/base.apk\n"
+            if args[0] == "pull":
+                Path(args[2]).write_bytes(b"invalid synthetic APK")
+                return ""
+            self.fail(args)
+        failed = subprocess.CompletedProcess([], 1, "SYNTHETIC private output", "person@example.org")
+        with patch.object(diag.subprocess, "run", return_value=failed):
+            result = diag.inspect_apks(runner, diag.PACKAGES[1], "/trusted/apksigner", user=10)
+        self.assertEqual(commands[0], ("shell", "pm", "path", "--user", "10", diag.PACKAGES[1]))
+        self.assertFalse(result["artifacts"][0]["signature_verified"])
+        self.assert_private(result)
+
     def test_apk_failure_is_not_success_and_bad_paths_are_never_pulled(self):
         runner = lambda *args: "package:/data/app/bad;command.apk\n"
         self.assertEqual(diag.inspect_apks(runner, diag.PACKAGES[1], "/trusted/apksigner")["status"], "unavailable_or_unsupported_path")

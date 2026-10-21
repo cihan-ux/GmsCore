@@ -211,7 +211,7 @@ install. Keeping the existing release signing key/identity is a separate prerequ
   account, Bundle, registration body/ID and parse-exception logging at those sites
   without changing auth requests, token results, firmware policy or install rights.
   It is not a repository-wide audit of every possible logging path.
-- Local regression suite: **21 tests passed** (19 diagnostic tests plus a JVM
+- Local regression suite: **22 tests passed** (20 diagnostic tests plus a JVM
   production-form roundtrip/privacy test and a sensitive-log-site regression
   guard). The roundtrip tests known/unknown fields and invalid numeric values
   with synthetic secrets, verifies the request still contains the credential,
