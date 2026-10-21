@@ -173,6 +173,25 @@ def inspect_apks(runner, package, apksigner, user=0):
         return {"status": "read_or_verification_unavailable"}
 
 
+def _is_failed_read(label, args, output):
+    """Some successful dumpsys package outputs contain embedded error strings.
+
+    Do not drop a complete package record just because one of its component,
+    resolver or diagnostics sections contains an unrelated "Error:" or
+    "SecurityException". A positive package header or core package metadata
+    establishes that the package dump can still be parsed for allowlisted fields.
+    """
+    if label.startswith("package.") and args[:3] == ("shell", "dumpsys", "package"):
+        package = label.removeprefix("package.")
+        explicit_header = re.search(
+            r"(?m)^\\s*Package \\[" + re.escape(package) + r"\\](?:\\s|:)", output
+        )
+        metadata = re.search(r"(?m)^\\s*(?:codePath=|versionCode=)", output)
+        if explicit_header or metadata:
+            return False
+    return bool(ERROR_TEXT.search(output))
+
+
 def snapshot(runner=adb, include_logcat=True, user=0, inspect=False, apksigner=None):
     status = {}
     def read(label, *args):
@@ -181,11 +200,9 @@ def snapshot(runner=adb, include_logcat=True, user=0, inspect=False, apksigner=N
         except RuntimeError:
             status[label] = "unavailable"
             return None
-        if ERROR_TEXT.search(value):
-            # Only treat error text as a failed command for non-logcat reads.
-            if args[0] != "logcat":
-                status[label] = "error_response"
-                return None
+        if args[0] != "logcat" and _is_failed_read(label, args, value):
+            status[label] = "error_response"
+            return None
         status[label] = "ok"
         return value
 
