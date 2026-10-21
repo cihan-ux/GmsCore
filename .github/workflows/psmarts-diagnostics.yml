@@ -1,0 +1,22 @@
+name: P Smart S diagnostics - offline tests
+
+on:
+  push:
+    paths:
+      - 'tools/psmarts-diagnostics/**'
+      - '.github/workflows/psmarts-diagnostics.yml'
+  pull_request:
+    paths:
+      - 'tools/psmarts-diagnostics/**'
+      - '.github/workflows/psmarts-diagnostics.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run pure Python unit tests (no ADB, no secrets)
+        run: python3 -m unittest discover -s tools/psmarts-diagnostics/tests -v
