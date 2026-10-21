@@ -63,3 +63,23 @@ This is a research experiment, not an endorsed Google, Huawei, microG, Xposed or
 On this P Smart S, `apksigner` reported `com.google.android.gms` **and** `com.android.vending` actually signed with the SHA-256 fingerprint `f0fd6c5b410f25cb25c3b53346c8972fae30f8ee7411df910480ad6b2d60db83`, matching the prior probe view, even with the module disabled. Therefore matching fingerprint values **cannot** establish whether the module loaded. 
 
 The canary is a local, in-memory probe-only `PackageInfo.versionName` suffix. Never use the canary for claims about system-wide signature spoofing, Play Protect or Google account support.
+
+## v0.3: Local signature positive control (not system spoofing)
+
+A live P Smart S AQM-LX1 (Android 10 / EMUI 12) probe confirmed
+`LOCAL XPOSED HOOK: ACTIVE (PROBE PROCESS ONLY)` and the bridge log
+`FakeGApps PSmartS: probe-only PackageInfo hook registered`.
+Its LSPatch logs reported `Use manager: false`, indicating embedded mode;
+the `dex2oat` denial did not prevent module initialization.
+
+v0.3 introduces an intentionally narrow **positive control**:
+* Only inside `dev.cihan.fakegapps.probe`, querying **the probe's own** PackageInfo with signature flags returns a substituted Google certificate.
+* The probe compares that local result with the **real on-disk APK** certificate via `getPackageArchiveInfo`, which is not hooked by this module.
+* `LOCAL SIGNATURE CONTROL: DIFFERENT (LOCAL OVERRIDE OBSERVED)` demonstrates the in-app result was changed; `NO LOCAL OVERRIDE DETECTED` or `INCONCLUSIVE` must not be reported as success.
+* Existing GMS/Vending SHA-256 fingerprints can match the Google certificate without any module intervention, so they are not a sufficient positive test.
+* This does **not** affect Android PackageManagerService, installers, signatures of installed packages, other apps, Google login, or Play Store installations.
+
+**Test upgrade:** install newly built `module-debug.apk` and the **new patched probe**.
+Because LSPatch changes an APK's signing key, an Android signature mismatch may require
+uninstalling **only** `dev.cihan.fakegapps.probe` before installing the new patched probe.
+Do not uninstall or patch microG, GMS, Play Store, or system packages.
