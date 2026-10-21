@@ -164,9 +164,11 @@ def inspect_apks(runner, package, apksigner, user=0):
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         text=True, errors="replace", timeout=60, check=False)
                 digests = re.findall(r"(?m)^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$", result.stdout)
+                sha1_digests = re.findall(r"(?m)^Signer #\d+ certificate SHA-1 digest: ([0-9a-fA-F]{40})\s*$", result.stdout)
                 artifacts.append({"part": index, "sha256": hashlib.sha256(local.read_bytes()).hexdigest(),
                                   "signature_verified": result.returncode == 0,
-                                  "signer_sha256": sorted(set(d.lower() for d in digests))})
+                                  "signer_sha256": sorted(set(d.lower() for d in digests)),
+                                  "signer_sha1": sorted(set(d.lower() for d in sha1_digests))})
         return {"status": "inspected", "artifacts": artifacts,
                 "scope": "APK bytes only; not caller-visible PackageManager signatures"}
     except (RuntimeError, OSError, subprocess.TimeoutExpired):
