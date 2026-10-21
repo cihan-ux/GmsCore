@@ -62,9 +62,14 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v6
-      - name: Ensure pinned Android build prerequisites
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Set up pinned Android build prerequisites
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          packages: 'platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: 'false'
       - name: Build VtmHuaweiDebug and run existing unit tests
+        id: build
         run: >-
           bash ./gradlew --no-daemon --no-configuration-cache --configure-on-demand --max-workers=2
           :play-services-nearby-core:testDebugUnitTest
@@ -72,7 +77,7 @@ jobs:
       - name: Verify Huawei components and debug APK signature
         run: |
           python3 - <<'PY'
-          import os, pathlib, subprocess
+          import os, pathlib, subprocess, xml.etree.ElementTree as ET
           sdk = pathlib.Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0'
           apks = list(pathlib.Path('play-services-core/build/outputs/apk/vtmHuawei/debug').glob('*.apk'))
           assert apks, 'No Huawei APK produced'
@@ -81,10 +86,15 @@ jobs:
               result = subprocess.run([str(sdk / 'aapt2'), 'dump', 'xmltree', str(apk), '--file', 'AndroidManifest.xml'], check=True, capture_output=True, text=True)
               for component in ('SignatureService', 'InitProvider', 'InitReceiver'):
                   assert 'com.huawei.signature.diff.' + component in result.stdout, component
-          print('Huawei components and APK signature verified; firmware support remains untested.')
+          reports = list(pathlib.Path('play-services-nearby/core/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          assert reports, 'No current unit-test XML produced'
+          suites = [ET.parse(report).getroot() for report in reports]
+          assert sum(int(suite.get('tests', '0')) for suite in suites) > 0, 'No tests executed'
+          assert all(int(suite.get(key, '0')) == 0 for suite in suites for key in ('failures', 'errors', 'skipped'))
+          print('Huawei components, APK signature and nonempty unit-test results verified; firmware support remains untested.')
           PY
       - name: Upload test XML (synthetic tests only; never device logs)
-        if: always()
+        if: always() && steps.build.outcome != 'skipped'
         uses: actions/upload-artifact@v4
         with:
           name: psmarts-crypto-test-results
