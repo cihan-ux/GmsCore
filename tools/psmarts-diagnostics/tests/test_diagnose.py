@@ -283,11 +283,18 @@ class DiagnosticTests(unittest.TestCase):
                 destinations[-1].write_bytes(b"synthetic APK")
                 return "person@example.org copied"
             self.fail(args)
-        result = subprocess.CompletedProcess([], 0, "Signer #1 certificate DN: person@example.org\nSigner #1 certificate SHA-256 digest: " + "a" * 64 + "\n", "SYNTHETIC")
+        result = subprocess.CompletedProcess(
+            [], 0,
+            "Signer #1 certificate DN: person@example.org\n"
+            "Signer #1 certificate SHA-256 digest: " + "a" * 64 + "\n"
+            "Signer #1 certificate SHA-1 digest: " + "b" * 40 + "\n",
+            "SYNTHETIC")
         with patch.object(diag.subprocess, "run", return_value=result):
             report = diag.inspect_apks(runner, diag.PACKAGES[1], "/trusted/apksigner")
         self.assertTrue(all(a["signature_verified"] for a in report["artifacts"]))
         self.assertEqual(len(report["artifacts"]), 2)
+        self.assertEqual(report["artifacts"][0]["signer_sha1"], ["b" * 40])
+        self.assertEqual(report["artifacts"][0]["signer_sha256"], ["a" * 64])
         self.assertFalse(any(p.exists() for p in destinations))
         self.assert_private(report)
 
