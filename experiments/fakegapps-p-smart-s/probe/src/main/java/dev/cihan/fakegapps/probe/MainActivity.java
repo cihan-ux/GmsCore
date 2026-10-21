@@ -61,9 +61,9 @@ public final class MainActivity extends Activity {
                 : localHash.equals(archiveHash) ? "NO LOCAL OVERRIDE DETECTED"
                 : "DIFFERENT (LOCAL OVERRIDE OBSERVED)";
             return "LOCAL SIGNATURE CONTROL: " + verdict
-                + "\\nPackageManager SHA-256: " + localHash
-                + "\\nOn-disk APK SHA-256: " + archiveHash
-                + "\\nComparison only concerns this probe process.";
+                + "\nPackageManager SHA-256: " + localHash
+                + "\nOn-disk APK SHA-256: " + archiveHash
+                + "\nComparison only concerns this probe process.";
         } catch (Throwable t) {
             return "LOCAL SIGNATURE CONTROL: UNKNOWN (" + t.getClass().getSimpleName() + ")";
         }
