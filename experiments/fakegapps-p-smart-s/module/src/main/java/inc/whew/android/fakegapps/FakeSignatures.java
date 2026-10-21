@@ -49,6 +49,19 @@ public class FakeSignatures implements IXposedHookLoadPackage {
                     if (packageName.equals("dev.cihan.fakegapps.probe")) {
                         pi.versionName = (pi.versionName == null ? "" : pi.versionName)
                             + "-hook-active";
+                        // Positive control: only replace the PROBE's own locally returned
+                        // signature, never the actual APK certificate or system state.
+                        // Unmodified getPackageArchiveInfo below allows a disk comparison.
+                        if (pi.signatures != null && pi.signatures.length > 0) {
+                            pi.signatures = new Signature[]{new Signature(certBytes)};
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && pi.signingInfo != null) {
+                            SigningInfo signingInfo = createSigningInfo(
+                                new Signature(certBytes), cert.getPublicKey());
+                            if (signingInfo != null) {
+                                pi.signingInfo = signingInfo;
+                            }
+                        }
                         param.setResult(pi);
                         return;
                     }
