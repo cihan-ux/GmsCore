@@ -184,9 +184,9 @@ def _is_failed_read(label, args, output):
     if label.startswith("package.") and args[:3] == ("shell", "dumpsys", "package"):
         package = label.removeprefix("package.")
         explicit_header = re.search(
-            r"(?m)^\\s*Package \\[" + re.escape(package) + r"\\](?:\\s|:)", output
+            r"(?m)^\s*Package \[" + re.escape(package) + r"\](?:\s|:)", output
         )
-        metadata = re.search(r"(?m)^\\s*(?:codePath=|versionCode=)", output)
+        metadata = re.search(r"(?m)^\s*(?:codePath=|versionCode=)", output)
         if explicit_header or metadata:
             return False
     return bool(ERROR_TEXT.search(output))
