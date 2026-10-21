@@ -45,7 +45,7 @@ def _match(pattern, body):
 
 
 def _safe_metadata(value):
-    return value if value and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._()+, -]{0,99}", value) else None
+    return value if value and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._()+, \[\]-]{0,99}", value) else None
 
 
 class Adb:
