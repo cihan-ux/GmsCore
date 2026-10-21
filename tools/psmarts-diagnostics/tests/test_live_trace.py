@@ -52,6 +52,14 @@ class LiveTraceTests(unittest.TestCase):
         self.assertIsNone(
             probe.classify_log_line("E/UnknownApp(44): com.android.vending requires Google Play services, but their signature is invalid."))
 
+    def test_install_failure_priority(self):
+        self.assertEqual(
+            probe.classify_log_line("E/PackageInstaller(44): INSTALL_FAILED_INVALID_APK install failed"),
+            "install_failed_hint")
+        self.assertEqual(
+            probe.classify_log_line("W/Finsky(123): download failed HTTP 403"),
+            "finsky_network_error_hint")
+
     def test_installer_event(self):
         self.assertEqual(
             probe.classify_log_line("I/PackageInstaller(44): create install session"),
