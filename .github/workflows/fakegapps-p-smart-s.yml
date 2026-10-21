@@ -35,4 +35,5 @@ jobs:
           name: fakegapps-p-smart-s-experimental-apks
           path: |
             experiments/fakegapps-p-smart-s/module/build/outputs/apk/debug/module-debug.apk
-            experiments/fakegapps-p-smart-s/probe/build/outputs/apk/debug/probe-debug.apk\n            experiments/fakegapps-p-smart-s/diagnostics/build/outputs/apk/debug/diagnostics-debug.apk
+            experiments/fakegapps-p-smart-s/probe/build/outputs/apk/debug/probe-debug.apk
+            experiments/fakegapps-p-smart-s/diagnostics/build/outputs/apk/debug/diagnostics-debug.apk
