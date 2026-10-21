@@ -133,6 +133,14 @@ class DiagnosticTests(unittest.TestCase):
                          "error_response")
         self.assertNotIn("version", report["packages"]["com.android.vending"])
 
+    def test_bracketed_play_store_version_retained_without_secrets(self):
+        raw = PACKAGE.replace("versionName=19.5.13",
+                              "versionName=19.5.13-all [0] [PR] 303545793")
+        self.assertEqual(diag.parse_package(raw)["version"],
+                         "19.5.13-all [0] [PR] 303545793")
+        self.assertIsNone(diag._safe_metadata("person@example.org?token=secret"))
+        self.assertIsNone(diag._safe_metadata("name/../../token"))
+
     def test_updated_system_app_is_not_classified_as_unprivileged(self):
         raw = PACKAGE.replace("flags=[ HAS_CODE ]", "flags=[ SYSTEM UPDATED_SYSTEM_APP ]").replace("privateFlags=[ HAS_DOMAIN_URLS ]", "privateFlags=[ PRIVILEGED ]")
         parsed = diag.parse_package(raw)
