@@ -49,20 +49,20 @@ def classify_log_line(line):
         if re.search(r"Checked in as|registration succeeded", line, re.I):
             return "gms_checkin_hint"
     if tag in ("Finsky", "Phonesky", "PlayCommon"):
-        if re.search(r"(?i)\b(?:install|downloading|download|delivery|acquire|acquisition)\b", line):
-            return "finsky_install_hint"
         if re.search(r"(?i)\b(?:VolleyError|HTTP 4\d\d|HTTP 5\d\d|TimeoutError|NetworkError)\b", line):
             return "finsky_network_error_hint"
+        if re.search(r"(?i)\b(?:install|downloading|download|delivery|acquire|acquisition)\b", line):
+            return "finsky_install_hint"
         if re.search(r"(?i)\b(?:Page .*loaded|Selecting account)\b", line):
             return "finsky_catalog_hint"
+    if re.search(r"\bINSTALL_FAILED(?:_[A-Z_]+)?\b", line):
+        if tag in ("PackageManager", "PackageInstaller", "PackageInstallerSession", "Finsky", "Phonesky"):
+            return "install_failed_hint"
     if tag in ("DownloadManager", "DownloadProvider", "DownloadThread", "DownloadService"):
         return "download_component_hint"
     if tag in ("PackageInstaller", "PackageManager", "PackageInstallerSession", "PackageInstallerService"):
         if re.search(r"(?i)\b(?:install|session|commit|failure|failed)\b", line):
             return "installer_component_hint"
-    if re.search(r"\bINSTALL_FAILED(?:_[A-Z_]+)?\b", line):
-        if tag in ("PackageManager", "PackageInstaller", "PackageInstallerSession", "Finsky", "Phonesky"):
-            return "install_failed_hint"
     if tag in ("Finsky", "Phonesky", "PackageManager", "PackageInstaller"):
         if ("Permission Denial" in line or "SecurityException" in line) and (
             "com.android.vending" in line or tag in ("Finsky", "Phonesky")
