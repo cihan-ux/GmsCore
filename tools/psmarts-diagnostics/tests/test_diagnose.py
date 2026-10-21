@@ -99,6 +99,40 @@ class DiagnosticTests(unittest.TestCase):
         self.assertFalse(parsed["requested_install_permissions"][diag.INSTALL_PERMS[1]])
         self.assertFalse(parsed["privileged_flag"])
 
+    def test_valid_playstore_dumpsys_survives_embedded_error_text(self):
+        """The user's Play Store package dump was dropped due to an unrelated error substring."""
+        sample = PACKAGE + """
+    Service info: SecurityException was handled by unrelated OEM component
+    Error: unrelated debug message inside successful package dump
+"""
+        class EmbeddedErrorFakeAdb(FakeAdb):
+            def __call__(self, *args):
+                if args == ("shell", "dumpsys", "package", "com.android.vending"):
+                    self.calls.append(args)
+                    return sample
+                return super().__call__(*args)
+
+        report = diag.snapshot(EmbeddedErrorFakeAdb(), include_logcat=False)
+        info = report["packages"]["com.android.vending"]
+        self.assertEqual(report["collection_status"]["package.com.android.vending"], "ok")
+        self.assertEqual(info["version"], "19.5.13")
+        self.assertEqual(info["target_sdk"], "29")
+        self.assertTrue(info["requested_install_permissions"]["android.permission.INSTALL_PACKAGES"])
+        self.assertFalse(info["privileged_flag"])
+        self.assert_private(report)
+
+    def test_actual_package_error_is_reported_not_parsed(self):
+        class FailedPackageFakeAdb(FakeAdb):
+            def __call__(self, *args):
+                if args == ("shell", "dumpsys", "package", "com.android.vending"):
+                    self.calls.append(args)
+                    return "Error: Can't find service package manager\n"
+                return super().__call__(*args)
+        report = diag.snapshot(FailedPackageFakeAdb(), include_logcat=False)
+        self.assertEqual(report["collection_status"]["package.com.android.vending"],
+                         "error_response")
+        self.assertNotIn("version", report["packages"]["com.android.vending"])
+
     def test_updated_system_app_is_not_classified_as_unprivileged(self):
         raw = PACKAGE.replace("flags=[ HAS_CODE ]", "flags=[ SYSTEM UPDATED_SYSTEM_APP ]").replace("privateFlags=[ HAS_DOMAIN_URLS ]", "privateFlags=[ PRIVILEGED ]")
         parsed = diag.parse_package(raw)
