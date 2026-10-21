@@ -1,7 +1,7 @@
 name: FakeGApps P Smart S experimental build
 on:
   push:
-    branches: [experiment/fakegapps-p-smart-s]
+    branches: [experiment/fakegapps-p-smart-s, experiment/fakegapps-v04-readonly-diagnostics]
     paths:
       - 'experiments/fakegapps-p-smart-s/**'
       - '.github/workflows/fakegapps-p-smart-s.yml'
@@ -28,11 +28,12 @@ jobs:
           test -n "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
-      - name: Build experimental module and probe
-        run: gradle -p experiments/fakegapps-p-smart-s --no-daemon :module:assembleDebug :probe:assembleDebug
+      - name: Build experimental module, probe, and readonly diagnostics
+        run: gradle -p experiments/fakegapps-p-smart-s --no-daemon :module:assembleDebug :probe:assembleDebug :diagnostics:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: fakegapps-p-smart-s-experimental-apks
           path: |
             experiments/fakegapps-p-smart-s/module/build/outputs/apk/debug/module-debug.apk
             experiments/fakegapps-p-smart-s/probe/build/outputs/apk/debug/probe-debug.apk
+            experiments/fakegapps-p-smart-s/diagnostics/build/outputs/apk/debug/diagnostics-debug.apk

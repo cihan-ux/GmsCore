@@ -83,3 +83,42 @@ v0.3 introduces an intentionally narrow **positive control**:
 Because LSPatch changes an APK's signing key, an Android signature mismatch may require
 uninstalling **only** `dev.cihan.fakegapps.probe` before installing the new patched probe.
 Do not uninstall or patch microG, GMS, Play Store, or system packages.
+
+## v0.4 — unpatched, side-by-side, read-only signature diagnostics
+
+**Reason:** Direct ADB `apksigner` inspection of this P Smart S revealed that installed
+microG-HW `com.google.android.gms` (0.3.17.252432-hw) is signed with
+`9bd06727e62796c0130eb6dab39b73157451582cbd138e86c468acc395d14165`, while
+`com.android.vending` (19.5.13-all) is signed with
+`f0fd6c5b410f25cb25c3b53346c8972fae30f8ee7411df910480ad6b2d60db83`.
+The earlier statement that both installed APKs have the Google fingerprint was mistaken:
+the v0.3 app-process hook altered the *locally returned* GMS PackageInfo result.
+
+The logs reported `GooglePlayServicesUtil: ... signature is invalid`, but did not
+establish which exact signature API Play Store calls or whether that warning is the
+direct cause of download failure.
+
+**v0.4 adds a third, standalone APK:** `diagnostics-debug.apk`, application ID
+`dev.cihan.fakegapps.diagnostics`. It reads and displays:
+* Actual `GET_SIGNATURES` and `GET_SIGNING_CERTIFICATES` SHA-256 fingerprints for
+  GMS and Play Store as seen by an **unpatched independent process**.
+* Package archives when readable, using `getPackageArchiveInfo`.
+* Platform `checkSignatures(com.google.android.gms, com.android.vending)`.
+* Platform `hasSigningCertificate` for Play's cert, once against Play (control)
+  and once against GMS.
+
+This is a **read-only comparison** of several public Android APIs, not instrumentation
+of Play Store's internal code. It cannot prove the exact Play Store verification
+call path, change any signature, grant permissions, or make Play Store download apps.
+
+**Side-by-side installation, no uninstall:**
+1. Download `fakegapps-p-smart-s-experimental-apks` from the v0.4 GitHub Actions run.
+2. Extract **only** `diagnostics-debug.apk`.
+3. Run `adb install diagnostics-debug.apk` (or open the APK normally).
+4. Launch **P Smart S Signature Diagnostics** and send its screen.
+5. Do **not** patch Diagnostics with LSPatch. Keep the existing v0.3
+   `dev.cihan.fakegapps.probe`, microG-HW and Play Store untouched.
+
+No root, Shizuku, internet permission, Google account access or device write access
+is needed. `module-debug.apk` and `probe-debug.apk` remain in the build for backwards
+compatibility but are not needed for the v0.4 test.

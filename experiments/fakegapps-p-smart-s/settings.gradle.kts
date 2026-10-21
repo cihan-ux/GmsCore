@@ -4,4 +4,4 @@ dependencyResolutionManagement {
     repositories { google(); maven("https://api.xposed.info"); mavenCentral() }
 }
 rootProject.name = "FakeGApps-PSmartS-Edition"
-include(":module", ":probe")
+include(":module", ":probe", ":diagnostics")
