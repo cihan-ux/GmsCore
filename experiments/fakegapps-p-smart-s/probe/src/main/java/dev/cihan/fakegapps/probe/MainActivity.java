@@ -21,6 +21,7 @@ public final class MainActivity extends Activity {
             + "Android API: " + Build.VERSION.SDK_INT + "\n"
             + "Device: " + Build.MANUFACTURER + " " + Build.MODEL + "\n"
             + probeHookStatus() + "\n\n"
+            + inspectLocalPositiveControl() + "\n\n"
             + inspect("com.google.android.gms")
             + "\n\n" + inspect("com.android.vending")
             + "\n\nThis screen shows ONLY what this app receives via PackageManager. "
@@ -40,6 +41,31 @@ public final class MainActivity extends Activity {
             return "LOCAL XPOSED HOOK: NOT DETECTED";
         } catch (Exception e) {
             return "LOCAL XPOSED HOOK: UNKNOWN (" + e.getClass().getSimpleName() + ")";
+        }
+    }
+
+    // getPackageInfo is intercepted locally by our probe-only hook.
+    // getPackageArchiveInfo reads the actual on-disk patched APK certificate.
+    // A difference demonstrates local returned-data modification, not ROM spoofing.
+    private String inspectLocalPositiveControl() {
+        PackageManager pm = getPackageManager();
+        try {
+            PackageInfo local = pm.getPackageInfo(getPackageName(), PackageManager.GET_SIGNATURES);
+            PackageInfo archive = pm.getPackageArchiveInfo(
+                getApplicationInfo().sourceDir, PackageManager.GET_SIGNATURES);
+            if (archive == null) return "LOCAL SIGNATURE CONTROL: APK archive unavailable";
+            String localHash = fingerprints(local.signatures);
+            String archiveHash = fingerprints(archive.signatures);
+            boolean comparable = !"<none>".equals(localHash) && !"<none>".equals(archiveHash);
+            String verdict = !comparable ? "INCONCLUSIVE (missing signature)"
+                : localHash.equals(archiveHash) ? "NO LOCAL OVERRIDE DETECTED"
+                : "DIFFERENT (LOCAL OVERRIDE OBSERVED)";
+            return "LOCAL SIGNATURE CONTROL: " + verdict
+                + "\\nPackageManager SHA-256: " + localHash
+                + "\\nOn-disk APK SHA-256: " + archiveHash
+                + "\\nComparison only concerns this probe process.";
+        } catch (Throwable t) {
+            return "LOCAL SIGNATURE CONTROL: UNKNOWN (" + t.getClass().getSimpleName() + ")";
         }
     }
 
