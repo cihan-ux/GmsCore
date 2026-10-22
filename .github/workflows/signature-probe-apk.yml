@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     paths:
-      - "tools/PackageManagerSignatureProbe/**"
+      - "tools/PackageManagerSignatureProbe_v1.0_source.zip"
       - ".github/workflows/signature-probe-apk.yml"
 jobs:
   build:
@@ -23,14 +23,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build APK
-        working-directory: tools/PackageManagerSignatureProbe
+      - name: Extract uploaded source ZIP
+        run: unzip -q tools/PackageManagerSignatureProbe_v1.0_source.zip -d probe-src
+      - name: Build APK from uploaded ZIP
+        working-directory: probe-src/PackageManagerSignatureProbe
         run: gradle --no-daemon :app:assembleDebug
-      - name: Package source ZIP
-        run: cd tools && zip -qr PackageManagerSignatureProbe_source.zip PackageManagerSignatureProbe
       - uses: actions/upload-artifact@v4
         with:
           name: signature-probe-apk-and-source
           path: |
-            tools/PackageManagerSignatureProbe/app/build/outputs/apk/debug/app-debug.apk
-            tools/PackageManagerSignatureProbe_source.zip
+            probe-src/PackageManagerSignatureProbe/app/build/outputs/apk/debug/app-debug.apk
+            tools/PackageManagerSignatureProbe_v1.0_source.zip
