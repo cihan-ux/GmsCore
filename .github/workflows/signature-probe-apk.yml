@@ -1,6 +1,11 @@
 name: Signature Probe APK
 on:
   workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "tools/PackageManagerSignatureProbe/**"
+      - ".github/workflows/signature-probe-apk.yml"
 jobs:
   build:
     runs-on: ubuntu-latest
