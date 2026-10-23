@@ -1,0 +1,19 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'dev.cihan.gmailhwbridge'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'dev.cihan.gmailhwbridge'
+        minSdk 29
+        targetSdk 29
+        versionCode 1
+        versionName '0.1.0-experimental'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+dependencies {
+    compileOnly project(':xposed-stubs')
+}
