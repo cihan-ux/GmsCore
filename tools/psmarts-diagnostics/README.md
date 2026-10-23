@@ -97,3 +97,44 @@ Huawei manifest components, and runs the existing five `CryptoTest` tests.
 CI artifacts contain test XML only, never device reports or raw logs.
 
 See [analysis and evidence table](../../docs/PLAYSTORE-ROOTLESS-ANALYSIS.md).
+
+## Single-command, privacy-safe Play Store trial
+
+The optional `trial.py` wrapper runs the existing schema-2 snapshot collector
+and the fixed-event `live_trace.py` together. This avoids shell-variable loss
+between terminal sessions and creates uniquely named private folders.
+
+```bash
+# Run from the GmsCore checkout (experiment/psmarts-live-events):
+python3 tools/psmarts-diagnostics/trial.py --seconds 45
+```
+
+Open a **free** Play Store app page without touching Install. Press Enter in the
+terminal when asked. After the before snapshot, the program starts the 45-second
+read-only recording and asks you to tap Install **once**. It then records the
+after snapshot and compares active sessions automatically.
+
+Files are located under
+`~/psmarts-test/trial-<generated>/`: `before.json`,
+`events.json`, `after.json`, `comparison.json`, `summary.json`.
+The program prints the full run directory; you do not need a persistent
+`RUN_DIR` environment variable. Every file is created private (`0600`);
+the run directory is `0700`.
+
+`summary.json` contains only fixed event names, numeric counts, a conservative
+strongest-observed-stage label and explicit unknowns. It **does not diagnose
+causality**, prove signature spoofing, confirm downloaded APK bytes or mark an
+installer session as a successful install. A missing/denied live log is recorded
+as unknown; the before/after session comparison still runs.
+
+For devices whose live logcat is unavailable:
+
+```bash
+python3 tools/psmarts-diagnostics/trial.py --no-live
+```
+
+Use `--user 0` for the primary Android user and `--serial SERIAL` if more
+than one ADB device is connected. Never paste raw logcat / token-containing
+tracebacks into a public GitHub issue. Review `summary.json` and
+`comparison.json` before sharing.
+

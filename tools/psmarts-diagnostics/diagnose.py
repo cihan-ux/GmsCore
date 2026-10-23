@@ -45,7 +45,7 @@ def _match(pattern, body):
 
 
 def _safe_metadata(value):
-    return value if value and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._()+, -]{0,99}", value) else None
+    return value if value and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._()+, \[\]-]{0,99}", value) else None
 
 
 class Adb:
@@ -164,13 +164,34 @@ def inspect_apks(runner, package, apksigner, user=0):
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         text=True, errors="replace", timeout=60, check=False)
                 digests = re.findall(r"(?m)^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$", result.stdout)
+                sha1_digests = re.findall(r"(?m)^Signer #\d+ certificate SHA-1 digest: ([0-9a-fA-F]{40})\s*$", result.stdout)
                 artifacts.append({"part": index, "sha256": hashlib.sha256(local.read_bytes()).hexdigest(),
                                   "signature_verified": result.returncode == 0,
-                                  "signer_sha256": sorted(set(d.lower() for d in digests))})
+                                  "signer_sha256": sorted(set(d.lower() for d in digests)),
+                                  "signer_sha1": sorted(set(d.lower() for d in sha1_digests))})
         return {"status": "inspected", "artifacts": artifacts,
                 "scope": "APK bytes only; not caller-visible PackageManager signatures"}
     except (RuntimeError, OSError, subprocess.TimeoutExpired):
         return {"status": "read_or_verification_unavailable"}
+
+
+def _is_failed_read(label, args, output):
+    """Some successful dumpsys package outputs contain embedded error strings.
+
+    Do not drop a complete package record just because one of its component,
+    resolver or diagnostics sections contains an unrelated "Error:" or
+    "SecurityException". A positive package header or core package metadata
+    establishes that the package dump can still be parsed for allowlisted fields.
+    """
+    if label.startswith("package.") and args[:3] == ("shell", "dumpsys", "package"):
+        package = label.removeprefix("package.")
+        explicit_header = re.search(
+            r"(?m)^\s*Package \[" + re.escape(package) + r"\](?:\s|:)", output
+        )
+        metadata = re.search(r"(?m)^\s*(?:codePath=|versionCode=)", output)
+        if explicit_header or metadata:
+            return False
+    return bool(ERROR_TEXT.search(output))
 
 
 def snapshot(runner=adb, include_logcat=True, user=0, inspect=False, apksigner=None):
@@ -181,11 +202,9 @@ def snapshot(runner=adb, include_logcat=True, user=0, inspect=False, apksigner=N
         except RuntimeError:
             status[label] = "unavailable"
             return None
-        if ERROR_TEXT.search(value):
-            # Only treat error text as a failed command for non-logcat reads.
-            if args[0] != "logcat":
-                status[label] = "error_response"
-                return None
+        if args[0] != "logcat" and _is_failed_read(label, args, value):
+            status[label] = "error_response"
+            return None
         status[label] = "ok"
         return value
 

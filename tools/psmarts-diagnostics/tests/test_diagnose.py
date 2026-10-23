@@ -99,6 +99,48 @@ class DiagnosticTests(unittest.TestCase):
         self.assertFalse(parsed["requested_install_permissions"][diag.INSTALL_PERMS[1]])
         self.assertFalse(parsed["privileged_flag"])
 
+    def test_valid_playstore_dumpsys_survives_embedded_error_text(self):
+        """The user's Play Store package dump was dropped due to an unrelated error substring."""
+        sample = PACKAGE + """
+    Service info: SecurityException was handled by unrelated OEM component
+    Error: unrelated debug message inside successful package dump
+"""
+        class EmbeddedErrorFakeAdb(FakeAdb):
+            def __call__(self, *args):
+                if args == ("shell", "dumpsys", "package", "com.android.vending"):
+                    self.calls.append(args)
+                    return sample
+                return super().__call__(*args)
+
+        report = diag.snapshot(EmbeddedErrorFakeAdb(), include_logcat=False)
+        info = report["packages"]["com.android.vending"]
+        self.assertEqual(report["collection_status"]["package.com.android.vending"], "ok")
+        self.assertEqual(info["version"], "19.5.13")
+        self.assertEqual(info["target_sdk"], "29")
+        self.assertTrue(info["requested_install_permissions"]["android.permission.INSTALL_PACKAGES"])
+        self.assertFalse(info["privileged_flag"])
+        self.assert_private(report)
+
+    def test_actual_package_error_is_reported_not_parsed(self):
+        class FailedPackageFakeAdb(FakeAdb):
+            def __call__(self, *args):
+                if args == ("shell", "dumpsys", "package", "com.android.vending"):
+                    self.calls.append(args)
+                    return "Error: Can't find service package manager\n"
+                return super().__call__(*args)
+        report = diag.snapshot(FailedPackageFakeAdb(), include_logcat=False)
+        self.assertEqual(report["collection_status"]["package.com.android.vending"],
+                         "error_response")
+        self.assertNotIn("version", report["packages"]["com.android.vending"])
+
+    def test_bracketed_play_store_version_retained_without_secrets(self):
+        raw = PACKAGE.replace("versionName=19.5.13",
+                              "versionName=19.5.13-all [0] [PR] 303545793")
+        self.assertEqual(diag.parse_package(raw)["version"],
+                         "19.5.13-all [0] [PR] 303545793")
+        self.assertIsNone(diag._safe_metadata("person@example.org?token=secret"))
+        self.assertIsNone(diag._safe_metadata("name/../../token"))
+
     def test_updated_system_app_is_not_classified_as_unprivileged(self):
         raw = PACKAGE.replace("flags=[ HAS_CODE ]", "flags=[ SYSTEM UPDATED_SYSTEM_APP ]").replace("privateFlags=[ HAS_DOMAIN_URLS ]", "privateFlags=[ PRIVILEGED ]")
         parsed = diag.parse_package(raw)
@@ -241,11 +283,18 @@ class DiagnosticTests(unittest.TestCase):
                 destinations[-1].write_bytes(b"synthetic APK")
                 return "person@example.org copied"
             self.fail(args)
-        result = subprocess.CompletedProcess([], 0, "Signer #1 certificate DN: person@example.org\nSigner #1 certificate SHA-256 digest: " + "a" * 64 + "\n", "SYNTHETIC")
+        result = subprocess.CompletedProcess(
+            [], 0,
+            "Signer #1 certificate DN: person@example.org\n"
+            "Signer #1 certificate SHA-256 digest: " + "a" * 64 + "\n"
+            "Signer #1 certificate SHA-1 digest: " + "b" * 40 + "\n",
+            "SYNTHETIC")
         with patch.object(diag.subprocess, "run", return_value=result):
             report = diag.inspect_apks(runner, diag.PACKAGES[1], "/trusted/apksigner")
         self.assertTrue(all(a["signature_verified"] for a in report["artifacts"]))
         self.assertEqual(len(report["artifacts"]), 2)
+        self.assertEqual(report["artifacts"][0]["signer_sha1"], ["b" * 40])
+        self.assertEqual(report["artifacts"][0]["signer_sha256"], ["a" * 64])
         self.assertFalse(any(p.exists() for p in destinations))
         self.assert_private(report)
 
