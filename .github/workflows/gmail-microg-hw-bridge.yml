@@ -1,0 +1,51 @@
+name: Gmail microG-HW Bridge module
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "tools/gmail-microg-hw-bridge/**"
+      - ".github/workflows/gmail-microg-hw-bridge.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile experimental Gmail-only module
+        working-directory: tools/gmail-microg-hw-bridge
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=tools/gmail-microg-hw-bridge/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          unzip -p "$APK" assets/xposed_init | grep -Fx dev.cihan.gmailhwbridge.BridgeHook
+          if unzip -Z1 "$APK" | grep -E '^de/robv/android/xposed'; then
+            echo "::error::Compile-only Xposed stub classes unexpectedly packaged"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gmail-microg-hw-module
+          path: tools/gmail-microg-hw-bridge/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
