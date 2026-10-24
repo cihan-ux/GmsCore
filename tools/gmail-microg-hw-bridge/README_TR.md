@@ -1,3 +1,30 @@
+# DURUM: AÇILIŞTA ÇÖKME DOĞRULANDI (2026-10-24)
+
+**Bu deneysel Gmail microG-HW Bridge modülünü çalışan bir çözüm olarak KULLANMAYIN.**
+LSPatch ile yeniden imzalanmış Gmail'de gerçek cihaz (HUAWEI AQM-LX1,
+Android 10/EMUI 12) günlüklerinde en az iki çökme gözlendi:
+
+- `java.lang.SecurityException: Access denied, missing google package permission for OWNER`
+- `java.lang.NullPointerException: Context.isRestricted()` from Android `FontsContract.fetchFonts`.
+
+**Kök neden / kuvvetli açıklama:** microG, `OWNER` gibi özel Google
+yetkilerini *çağıran uygulamanın sistemde kayıtlı gerçek imzasına* göre
+`ExtendedPackageInfo.hasGooglePackagePermission` ile sınar. LSPatch,
+Gmail APK'sını yeniden imzaladığı için özgün Google sertifikası kaybolur.
+Bu modül yalnızca Gmail'in görebildiği GMS imza verisini değiştirir;
+microG'nin Gmail imzasına yönelik ayrı kontrolünü değiştirmez.
+
+İlgili upstream dosyalar:
+- https://github.com/microg/GmsCore/blob/master/play-services-base/core/src/main/java/org/microg/gms/common/PackageUtils.java
+- https://github.com/microg/GmsCore/blob/master/play-services-base/core/src/main/kotlin/org/microg/gms/common/KnownGooglePackages.kt
+- https://github.com/microg/GmsCore/blob/master/play-services-base/core/src/main/kotlin/org/microg/gms/utils/ExtendedPackageInfo.kt
+
+**Sonuç:** APK'nın GitHub Actions'ta başarıyla derlenmesi çalışma zamanı uyumluluğu
+anlamına gelmez. Gmail verilerini/hesapları yedeklemeden kaldırma veya temizleme
+yapmayın. Deneysel yamayı Gmail için çözüm gibi önermeyin.
+
+---
+
 # Gmail microG-HW Bridge — Deneysel modül
 
 Bu proje **Gmail APK'sı değildir**. LSPatch ile yalnızca Gmail'in işlemine yüklenmek üzere tasarlanmış klasik Xposed API modülüdür.
