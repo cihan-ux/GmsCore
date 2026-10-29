@@ -23,6 +23,23 @@ It is not an anti-advertising filter for any arbitrary Gspace release.
 4. Read the generated `.mpp` from `patches/build/libs/`.
 5. Add the patch bundle as a patch source in Morphe, or use Morphe Desktop with `-p` for local `.mpp` testing.
 
+## Build on GitHub Actions
+
+This branch includes [Gspace NoAds Morphe patch](https://github.com/cihan-ux/GmsCore/actions/workflows/gspace-noads-morphe.yml).
+The `validate` job runs without any credentials. The build job deliberately skips compilation until
+the following repository Actions secret is set:
+
+- **Secret name:** `MORPHE_PACKAGES_TOKEN`
+- **Secret value:** your GitHub personal access token with `read:packages` permission for the Morphe package registry
+- **Location:** repository Settings → Secrets and variables → Actions → New repository secret
+
+Never paste the token into an issue, README or chat. Once the secret is configured, trigger the workflow on
+the `gspace-noads-morphe` branch or push another change to this patch project.
+After a successful build, download the `gspace-noads-morphe-mpp` artifact from that workflow run.
+
+**Note:** A green workflow can mean payload validation succeeded **without** compiling a bundle.
+Only an uploaded `.mpp` artifact confirms a build actually ran.
+
 ## Test the DEX delta
 
 With a locally owned original Gspace 2.3.3 APK:
