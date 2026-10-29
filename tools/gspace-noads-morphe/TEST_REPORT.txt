@@ -1,0 +1,11 @@
+Gspace NoAds diff test
+======================
+Input DEX SHA-256: 3596977526bfd45da5c8cdca2f72894fd8dca10bb59e73dcee9da236381fb067
+Expected patched DEX SHA-256: 943b8697a03162e6fabf5099d204b812c5ae56527990ee4def8faaa15aee3bba
+Input APK bytes: 15415036
+Patched APK bytes: 15431497
+Changed non-header DEX bytes: 1097
+Compressed patch payload: 2349 bytes
+Replay test: PASS (exact patched DEX match)
+Morphe .mpp build: NOT RUN (Gradle plugin unavailable offline)
+Morphe patch execution: NOT RUN
