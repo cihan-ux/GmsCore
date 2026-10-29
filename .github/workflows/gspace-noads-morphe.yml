@@ -1,0 +1,70 @@
+name: Gspace NoAds Morphe patch
+
+on:
+  push:
+    branches: [gspace-noads-morphe]
+    paths:
+      - 'tools/gspace-noads-morphe/**'
+      - '.github/workflows/gspace-noads-morphe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate NoAds delta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check bundled delta integrity and monotonic offsets
+        working-directory: tools/gspace-noads-morphe
+        run: |
+          python3 - <<'PY'
+          import hashlib, struct, zlib
+          from pathlib import Path
+
+          p = Path('patches/src/main/resources/gspace-233.delta.zlib')
+          compressed = p.read_bytes()
+          assert hashlib.sha256(compressed).hexdigest() == 'c5a903486343c4c4289c96c4bc5d99b817594525dce1ed6c23384364426ac6fe'
+          data = zlib.decompress(compressed)
+          count = struct.unpack_from('>I', data, 0)[0]
+          assert count == 1097
+          assert len(data) == 4 + count * 5
+          offsets = [struct.unpack_from('>I', data, 4 + 5*i)[0] for i in range(count)]
+          assert all(a < b for a,b in zip(offsets, offsets[1:]))
+          assert offsets[0] > 31
+          print(f'PASS: {count} offset/byte records; SHA-256 verified')
+          PY
+
+  build:
+    name: Build Morphe MPP (requires package token)
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.8.1'
+      - name: Build patch bundle when package secret is configured
+        working-directory: tools/gspace-noads-morphe
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.MORPHE_PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$GITHUB_TOKEN" ]; then
+            echo "::notice::Set repository secret MORPHE_PACKAGES_TOKEN with read:packages access to build an MPP."
+            exit 0
+          fi
+          gradle buildAndroid --no-daemon
+      - name: Upload MPP
+        if: ${{ hashFiles('tools/gspace-noads-morphe/patches/build/libs/*.mpp') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gspace-noads-morphe-mpp
+          path: tools/gspace-noads-morphe/patches/build/libs/*.mpp
+          if-no-files-found: error
