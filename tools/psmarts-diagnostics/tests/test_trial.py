@@ -130,31 +130,51 @@ class TrialTests(unittest.TestCase):
             report = json.loads((run / "summary.json").read_text())
             self.assertEqual(report["event_counts"]["gms_signature_rejected"], 5)
 
-    def test_no_live_does_not_read_logcat(self):
+    def test_no_live_waits_for_manual_attempt_between_snapshots(self):
         class FakeRunner:
             def __call__(self, *args):
                 return "device"
+        order = []
+        snapshots = iter((before(), after()))
+        def snapshot(*args, **kwargs):
+            order.append("snapshot")
+            return next(snapshots)
+        def prompt(message):
+            order.append("prompt")
+            self.assertIn("ENTER", message)
+            return ""
         with tempfile.TemporaryDirectory() as td, \
              patch.object(trial.diagnose, "Adb", return_value=FakeRunner()), \
-             patch.object(trial.diagnose, "snapshot", side_effect=[before(), after()]), \
+             patch.object(trial.diagnose, "snapshot", side_effect=snapshot), \
              patch.object(trial.diagnose, "compare", return_value=diff()), \
              patch.object(trial.live_trace, "capture",
                           side_effect=AssertionError("must not collect")):
-            run = trial.run(Path(td), no_live=True, prompt=lambda _: "")
+            run = trial.run(Path(td), no_live=True, prompt=prompt)
+            self.assertEqual(order, ["prompt", "snapshot", "prompt", "snapshot"])
             self.assertFalse((run / "events.json").exists())
             summary = json.loads((run / "summary.json").read_text())
             self.assertIsNone(summary["event_counts"]["gms_signature_rejected"])
 
-    def test_logcat_failure_preserves_session_comparison(self):
+    def test_logcat_failure_preserves_sessions_and_waits_for_attempt(self):
         class FakeRunner:
             def __call__(self, *args):
                 return "device"
+        order = []
+        snapshots = iter((before(), after()))
+        def snapshot(*args, **kwargs):
+            order.append("snapshot")
+            return next(snapshots)
+        def prompt(message):
+            order.append("prompt")
+            self.assertIn("ENTER", message)
+            return ""
         with tempfile.TemporaryDirectory() as td, \
              patch.object(trial.diagnose, "Adb", return_value=FakeRunner()), \
-             patch.object(trial.diagnose, "snapshot", side_effect=[before(), after()]), \
+             patch.object(trial.diagnose, "snapshot", side_effect=snapshot), \
              patch.object(trial.diagnose, "compare", return_value=diff(new=[101])), \
              patch.object(trial.live_trace, "capture", side_effect=RuntimeError("token")):
-            run = trial.run(Path(td), prompt=lambda _: "")
+            run = trial.run(Path(td), prompt=prompt)
+            self.assertEqual(order, ["prompt", "snapshot", "prompt", "snapshot"])
             summary = json.loads((run / "summary.json").read_text())
             self.assertNotIn("token", json.dumps(summary))
             self.assertEqual(summary["new_current_vending_session_count"], 1)
