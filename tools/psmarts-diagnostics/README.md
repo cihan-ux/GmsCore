@@ -133,6 +133,15 @@ For devices whose live logcat is unavailable:
 python3 tools/psmarts-diagnostics/trial.py --no-live
 ```
 
+In `--no-live` mode, the tool now **pauses after the before snapshot**:
+tap Install just once, wait approximately 30–60 seconds for an outcome,
+then press Enter for the after snapshot. It does not attempt to operate
+the phone or save logs. If live logcat fails unexpectedly, the same
+manual confirmation prompt is shown before the after snapshot instead
+of silently comparing two untouched states. In either case, event counts
+remain `unknown`; a session difference is observation, not proof of a
+successful download, firmware support or working signature spoofing.
+
 Use `--user 0` for the primary Android user and `--serial SERIAL` if more
 than one ADB device is connected. Never paste raw logcat / token-containing
 tracebacks into a public GitHub issue. Review `summary.json` and
