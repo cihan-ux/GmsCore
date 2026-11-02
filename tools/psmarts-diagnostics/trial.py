@@ -125,14 +125,20 @@ def run(workspace, serial=None, user=0, seconds=45, no_live=False, prompt=input)
     events = None
     if no_live:
         print("Live logcat skipped; log event counts will be unknown.")
+        print("The before snapshot is complete; the phone is ready for one manual attempt.")
+        prompt("Tap Install ONCE, wait 30-60 seconds, then press ENTER for the after snapshot: ")
     else:
         print("Live recording started. Tap Install ONCE now; leave the phone connected.")
         try:
             events = live_trace.capture(serial=serial, seconds=seconds)
         except (OSError, RuntimeError, ValueError):
             # A logcat failure must not erase useful before/after session evidence.
+            # Avoid immediately taking the after snapshot before any manual attempt.
             events = {"schema": 1, "collector_status": "unavailable",
                       "raw_logs_written": False}
+            print("Live logcat unavailable; event counts remain unknown.")
+            prompt("If you have not tapped Install, tap ONCE; otherwise wait. "
+                   "Press ENTER after the attempt to take the after snapshot: ")
         live_trace.private_output(run_dir / "events.json", events)
 
     after = diagnose.snapshot(runner, include_logcat=False, user=user)
