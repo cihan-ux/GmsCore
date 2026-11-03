@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - playstore-rootless-installer-lab
+      - aurora-rootless-safe-smoke-v0.1
     paths:
       - 'labs/playstore-rootless-installer/**'
       - '.github/workflows/playstore-rootless-lab.yml'
@@ -28,7 +29,11 @@ jobs:
       - name: Build debug lab APK
         run: |
           chmod +x gradlew
-          ./gradlew -p labs/playstore-rootless-installer :app:assembleDebug :smoke-app:assembleDebug --no-daemon --max-workers=2
+          ./gradlew -p labs/playstore-rootless-installer :app:testDebugUnitTest :app:assembleDebug :smoke-app:assembleDebug --no-daemon --max-workers=2
+      - name: Verify smoke-only policy source
+        run: |
+          grep -q 'InstallSafetyGate.prepare(this, uri)' labs/playstore-rootless-installer/app/src/main/java/org/psmarts/rootlesslab/MainActivity.java
+          grep -q 'org.psmarts.rootlesslab.smoke' labs/playstore-rootless-installer/app/src/main/java/org/psmarts/rootlesslab/SmokePolicy.java
       - name: Upload lab APK
         uses: actions/upload-artifact@v4
         with:
