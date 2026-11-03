@@ -21,6 +21,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 
@@ -45,13 +47,13 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView warning = new TextView(this);
-        warning.setText("\nAndroid 10 test only. Select an APK you already trust and downloaded. Android must ask you to confirm installation.\n\nThis app cannot repair Play Store downloads or bypass account/signature protection.\n");
+        warning.setText("\nAndroid 10 smoke test only. Only a NEW, permissionless Installer Smoke Test APK is accepted. Existing apps, Google services and updates are blocked. Android must ask for confirmation.\n\nThis does not repair Aurora or Play Store downloads.\n");
         warning.setTextSize(15);
         warning.setTextColor(Color.DKGRAY);
         root.addView(warning);
 
         Button select = new Button(this);
-        select.setText("Choose local APK to test");
+        select.setText("Choose disposable Smoke Test APK");
         root.addView(select);
         select.setOnClickListener(v -> pick());
 
@@ -95,30 +97,32 @@ public final class MainActivity extends Activity {
             return;
         }
         Uri uri = data.getData();
-        show("Preparing a user-approved install. No silent installs.");
+        show("Checking the disposable APK before creating any install session.");
         new Thread(() -> submitInstall(uri), "install-lab-worker").start();
     }
 
     private void submitInstall(Uri uri) {
+        File checkedApk = null;
         PackageInstaller installer = getPackageManager().getPackageInstaller();
         PackageInstaller.Session session = null;
         int sessionId = -1;
         boolean committed = false;
         try {
+            // Strictly inspect a private copy BEFORE creating a session.
+            checkedApk = InstallSafetyGate.prepare(this, uri);
             PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
                     PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            params.setAppPackageName(SmokePolicy.TEST_PACKAGE);
             sessionId = installer.createSession(params);
             session = installer.openSession(sessionId);
-            try (InputStream input = getContentResolver().openInputStream(uri)) {
-                if (input == null) throw new IllegalStateException("APK could not be opened");
-                try (OutputStream output = session.openWrite("base.apk", 0, -1)) {
-                    byte[] buffer = new byte[65536];
-                    int count;
-                    while ((count = input.read(buffer)) != -1) {
-                        output.write(buffer, 0, count);
-                    }
-                    session.fsync(output);
+            try (InputStream input = new FileInputStream(checkedApk);
+                 OutputStream output = session.openWrite("base.apk", 0, checkedApk.length())) {
+                byte[] buffer = new byte[65536];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, count);
                 }
+                session.fsync(output);
             }
             Intent callback = new Intent(this, InstallStatusReceiver.class);
             callback.setAction("org.psmarts.rootlesslab.INSTALL_RESULT");
@@ -127,16 +131,27 @@ public final class MainActivity extends Activity {
             PendingIntent pendingIntent = PendingIntent.getBroadcast(this, sessionId, callback, flags);
             session.commit(pendingIntent.getIntentSender());
             committed = true;
-            show("Submitted. Follow the Android installer confirmation. No root used.");
+            show("Smoke APK submitted. Approve it in Android's own confirmation UI.");
+        } catch (SecurityException rejected) {
+            // OEM exceptions might contain private package details; never print their text.
+            show("Blocked: APK did not pass the safe disposable test checks.");
+            Log.w(TAG, "Installer smoke test blocked by policy or Android security");
         } catch (Exception e) {
-            show("Install test failed: " + e.getClass().getSimpleName() + ". Check logcat tag RootlessInstallerLab.");
-            Log.e(TAG, "Install submission failure", e);
+            show("Test failed: " + e.getClass().getSimpleName() + ". No account changes.");
+            Log.e(TAG, "Installer smoke test failed (" + e.getClass().getSimpleName() + ")");
         } finally {
-            if (session != null) {
-                if (!committed) {
+            if (!committed) {
+                if (session != null) {
                     try { session.abandon(); } catch (Exception ignored) {}
+                } else if (sessionId >= 0) {
+                    try { installer.abandonSession(sessionId); } catch (Exception ignored) {}
                 }
+            }
+            if (session != null) {
                 try { session.close(); } catch (Exception ignored) {}
+            }
+            if (checkedApk != null && checkedApk.exists() && !checkedApk.delete()) {
+                Log.w(TAG, "Temporary smoke APK could not be deleted");
             }
         }
     }
