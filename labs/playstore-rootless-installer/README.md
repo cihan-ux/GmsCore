@@ -56,7 +56,7 @@ This verifies Android's user-approved APK installation, **NOT** Google Play's ab
 Before the app creates an Android PackageInstaller session, it copies the selected file to a temporary *app-private* `.apk` and checks:
 - APK parses successfully; fixed maximum size 20 MiB.
 - Manifest package name is exactly `org.psmarts.rootlesslab.smoke`.
-- Manifest requests **zero permissions**; unreadable permission metadata is rejected.
+- Manifest requests **zero permissions**; Android may represent that as a null permission array when `GET_PERMISSIONS` was requested. Unreadable APKs are rejected.
 - The smoke package is **not already installed**; updates are always rejected.
 - A validated session declares the expected package identity; Android still verifies the APK and asks for installation approval.
 
