@@ -16,10 +16,9 @@ public final class SmokePolicy {
         if (!TEST_PACKAGE.equals(packageName)) {
             return "Blocked: only the disposable Installer Smoke Test APK is allowed.";
         }
-        if (requestedPermissions == null) {
-            return "Blocked: APK permission declarations could not be checked.";
-        }
-        if (requestedPermissions.length != 0) {
+        // PackageInfo documents null when the manifest has NO uses-permission tags.
+        // GET_PERMISSIONS was explicitly requested for the parsed APK.
+        if (requestedPermissions != null && requestedPermissions.length != 0) {
             return "Blocked: the smoke APK must request zero permissions.";
         }
         if (alreadyInstalled) {
