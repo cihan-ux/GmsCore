@@ -133,9 +133,9 @@ public final class MainActivity extends Activity {
             committed = true;
             show("Smoke APK submitted. Approve it in Android's own confirmation UI.");
         } catch (SecurityException rejected) {
-            // Every rejection originates in our fixed, non-sensitive policy strings.
-            show(rejected.getMessage());
-            Log.w(TAG, "Installer smoke test blocked by policy");
+            // OEM exceptions might contain private package details; never print their text.
+            show("Blocked: APK did not pass the safe disposable test checks.");
+            Log.w(TAG, "Installer smoke test blocked by policy or Android security");
         } catch (Exception e) {
             show("Test failed: " + e.getClass().getSimpleName() + ". No account changes.");
             Log.e(TAG, "Installer smoke test failed (" + e.getClass().getSimpleName() + ")");
