@@ -21,10 +21,13 @@ public class SmokePolicyTest {
         assertNotNull(SmokePolicy.rejectionReason("com.openai.chatgpt", new String[0], false));
     }
 
-    @Test public void blocksDeclaredPermissionsAndUnknownPermissions() {
+    @Test public void blocksDeclaredPermissions() {
         assertNotNull(SmokePolicy.rejectionReason(
                 SmokePolicy.TEST_PACKAGE, new String[]{"android.permission.INTERNET"}, false));
-        assertNotNull(SmokePolicy.rejectionReason(SmokePolicy.TEST_PACKAGE, null, false));
+    }
+
+    @Test public void nullMeansNoPermissionsWhenGetPermissionsWasRequested() {
+        assertNull(SmokePolicy.rejectionReason(SmokePolicy.TEST_PACKAGE, null, false));
     }
 
     @Test public void blocksUpdatesEvenToSmokeApp() {
