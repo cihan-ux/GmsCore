@@ -1,0 +1,32 @@
+name: Wallet compatibility privacy checks
+
+on:
+  push:
+    branches: [wallet-compat-v0.2]
+    paths:
+      - '.github/workflows/wallet-compat-tests.yml'
+      - 'tools/wallet_trace_report.py'
+      - 'tools/test_wallet_compat.py'
+      - 'play-services-core/src/main/java/org/microg/gms/wallet/**'
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/wallet-compat-tests.yml'
+      - 'tools/wallet_trace_report.py'
+      - 'tools/test_wallet_compat.py'
+      - 'play-services-core/src/main/java/org/microg/gms/wallet/**'
+
+permissions:
+  contents: read
+
+jobs:
+  privacy-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run Wallet source/privacy checks
+        run: python3 -m unittest discover -s tools -p 'test_wallet_compat.py' -v

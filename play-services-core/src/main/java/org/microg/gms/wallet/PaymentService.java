@@ -33,7 +33,7 @@ public class PaymentService extends BaseService {
         new Feature("wallet", 1L),
         new Feature("wallet_biometric_auth_keys", 1L),
         new Feature("wallet_payment_dynamic_update", 2L),
-        new Feature("wallet_1p_initialize_buyflow", 1L),
+        // First-party buyflow is not implemented; advertising it causes clients to request unsupported APIs.
         new Feature("wallet_warm_up_ui_process", 1L),
         new Feature("wallet_get_setup_wizard_intent", 4L),
         new Feature("wallet_get_payment_card_recognition_intent", 1L),

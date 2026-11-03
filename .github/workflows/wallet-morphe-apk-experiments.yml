@@ -1,0 +1,169 @@
+name: Experimental Morphe Wallet APKs (A/B)
+
+on:
+  push:
+    branches: [wallet-compat-v0.2]
+    paths:
+      - '.github/workflows/wallet-morphe-apk-experiments.yml'
+      - 'play-services-core/src/main/java/org/microg/gms/wallet/OwServiceImpl.java'
+      - 'play-services-core/src/main/java/org/microg/gms/wallet/PaymentService.java'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wallet-morphe-experiments-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  morphe-wallet-ab:
+    name: Morphe 7.2.2-dev.3 experimental debug APKs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+
+    steps:
+      - name: Checkout experimental Wallet code
+        uses: actions/checkout@v4
+        with:
+          path: wallet-patches
+          persist-credentials: false
+
+      - name: Checkout Morphe MicroG-RE (pinned tag)
+        uses: actions/checkout@v4
+        with:
+          repository: MorpheApp/MicroG-RE
+          ref: 7.2.2-dev.3
+          path: morphe-src
+          persist-credentials: false
+
+      - name: Prepare Wallet A/B sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          p="play-services-core/src/main/java/org/microg/gms/wallet"
+          cp "wallet-patches/$p/OwServiceImpl.java" "morphe-src/$p/OwServiceImpl.java"
+          cp "wallet-patches/$p/PaymentService.java" "morphe-src/$p/PaymentService.java"
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path("morphe-src/play-services-core/src/main/java/org/microg/gms/wallet/OwServiceImpl.java").read_text()
+          assert src.count("onClientTokenReceived(Status.INTERNAL_ERROR,") == 1
+          assert "returning INTERNAL_ERROR (unsupported)" in src
+          gradle = Path("morphe-src/build.gradle").read_text()
+          assert 'ext.basePackageName = "app.revanced"' in gradle
+          PY
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android SDK 36
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install SDK platform and build tools
+        run: sdkmanager --install 'platforms;android-36' 'build-tools;35.0.0'
+
+      - name: Compile A control APK (INTERNAL_ERROR)
+        working-directory: morphe-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew :play-services-core:assembleDefaultDebug \
+            --no-daemon --max-workers=2 --no-configuration-cache \
+            -Dorg.gradle.jvmargs="-Xms256m -Xmx3072m -XX:MaxMetaspaceSize=1024m -XX:+UseParallelGC" \
+            -Pkotlin.compiler.execution.strategy=in-process
+      - name: Verify and preserve A control APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          apk=$(find morphe-src/play-services-core/build/outputs/apk/default/debug -maxdepth 1 -type f -name '*.apk' -print -quit)
+          test -n "$apk"
+          cp "$apk" dist/MorpheWallet-A-CONTROL-DEBUG.apk
+
+      - name: Enable experimental B empty SUCCESS token callback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          file = Path("morphe-src/play-services-core/src/main/java/org/microg/gms/wallet/OwServiceImpl.java")
+          text = file.read_text(encoding="utf-8")
+          before = "callbacks.onClientTokenReceived(Status.INTERNAL_ERROR, new GetClientTokenResponse(), Bundle.EMPTY);"
+          after = "callbacks.onClientTokenReceived(Status.SUCCESS, new GetClientTokenResponse(), Bundle.EMPTY);"
+          assert text.count(before) == 1, "Unexpected Morphe Wallet source: fail closed"
+          text = text.replace(before, after, 1)
+          file.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Compile B experimental APK (SUCCESS with EMPTY token response)
+        working-directory: morphe-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :play-services-core:assembleDefaultDebug \
+            --no-daemon --max-workers=2 --no-configuration-cache \
+            -Dorg.gradle.jvmargs="-Xms256m -Xmx3072m -XX:MaxMetaspaceSize=1024m -XX:+UseParallelGC" \
+            -Pkotlin.compiler.execution.strategy=in-process
+
+      - name: Verify, hash and label both APKs
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=$(find morphe-src/play-services-core/build/outputs/apk/default/debug -maxdepth 1 -type f -name '*.apk' -print -quit)
+          test -n "$apk"
+          cp "$apk" dist/MorpheWallet-B-EMPTY-SUCCESS-DEBUG.apk
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          for variant in A-CONTROL B-EMPTY-SUCCESS; do
+            file="dist/MorpheWallet-${variant}-DEBUG.apk"
+            "$signer" verify --verbose "$file"
+            "$aapt" dump badging "$file" | grep -E "^package: name='app.revanced.android.gms'" > /dev/null
+            "$signer" verify --print-certs "$file" > "dist/${variant}-SIGNATURE.txt"
+          done
+          test "$(sha256sum dist/MorpheWallet-A-CONTROL-DEBUG.apk | cut -d' ' -f1)" != "$(sha256sum dist/MorpheWallet-B-EMPTY-SUCCESS-DEBUG.apk | cut -d' ' -f1)"
+          ( cd dist && sha256sum *.apk > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt )
+          cat > dist/READ-ME-FIRST.txt <<'EOF'
+          MORPHE WALLET A/B EXPERIMENT (DEBUG BUILDS, NO PRODUCTION SIGNATURE)
+
+          A-CONTROL: getClientToken -> Status.INTERNAL_ERROR, empty response.
+          B-EMPTY-SUCCESS: getClientToken -> Status.SUCCESS, empty response.
+          IMPORTANT: B DOES NOT CREATE A VALID GOOGLE TOKEN. IT MAY STILL FAIL.
+
+          Package name: app.revanced.android.gms
+          These APKs use ephemeral CI debug signing (NOT official Morphe signing).
+          They CANNOT update an installed Morphe APK signed with another key.
+          Do NOT uninstall Morphe microG, clear account data or replace Play Store
+          just to test, without a separate backup and explicit recovery plan.
+          Only test on a disposable, compatible environment. No payment tests.
+          The Android 10 AccountManager and protected system permissions remain
+          separate blockers. A successful build proves ONLY APK compilation.
+          EOF
+
+          {
+            echo "## Morphe Wallet A/B debug APKs"
+            echo ""
+            echo "A: INTERNAL_ERROR control; B: SUCCESS with an empty token response."
+            echo "This does not provide a valid Google token or guarantee Play Store installs."
+            echo "Do NOT uninstall or overwrite working signed microG on Huawei P Smart S."
+            echo ""
+            echo "### APK hashes"
+            cat dist/SHA256SUMS.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK experiments
+        uses: actions/upload-artifact@v4
+        with:
+          name: MorpheWallet-AB-DEBUG-${{ github.run_number }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
