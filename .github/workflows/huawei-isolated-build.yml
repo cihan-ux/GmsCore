@@ -41,6 +41,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gmscore-user-mapbox-debug-research
-          path: play-services-core/build/outputs/apk/user/mapbox/debug/*.apk
+          path: play-services-core/build/outputs/apk/**/*.apk
           if-no-files-found: error
           retention-days: 7
