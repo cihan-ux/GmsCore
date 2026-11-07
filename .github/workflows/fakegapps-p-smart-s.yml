@@ -1,0 +1,38 @@
+name: FakeGApps P Smart S experimental build
+on:
+  push:
+    branches: [experiment/fakegapps-p-smart-s]
+    paths:
+      - 'experiments/fakegapps-p-smart-s/**'
+      - '.github/workflows/fakegapps-p-smart-s.yml'
+  pull_request:
+    paths:
+      - 'experiments/fakegapps-p-smart-s/**'
+      - '.github/workflows/fakegapps-p-smart-s.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android SDK 35 using runner tools
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+      - name: Build experimental module and probe
+        run: gradle -p experiments/fakegapps-p-smart-s --no-daemon :module:assembleDebug :probe:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fakegapps-p-smart-s-experimental-apks
+          path: |
+            experiments/fakegapps-p-smart-s/module/build/outputs/apk/debug/module-debug.apk
+            experiments/fakegapps-p-smart-s/probe/build/outputs/apk/debug/probe-debug.apk
