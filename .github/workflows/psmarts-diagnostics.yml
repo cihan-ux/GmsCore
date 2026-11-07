@@ -1,22 +1,103 @@
-name: P Smart S diagnostics - offline tests
+name: P Smart S diagnostics and Huawei build
 
 on:
   push:
+    branches: [psmarts-playstore-diagnostics]
     paths:
       - 'tools/psmarts-diagnostics/**'
       - '.github/workflows/psmarts-diagnostics.yml'
+      - 'docs/PLAYSTORE-ROOTLESS-ANALYSIS.md'
+      - 'play-services-core/src/main/java/org/microg/gms/auth/**'
+      - 'play-services-core/src/main/java/org/microg/gms/checkin/**'
+      - 'play-services-base/core/src/main/java/org/microg/gms/common/HttpFormClient.java'
   pull_request:
     paths:
       - 'tools/psmarts-diagnostics/**'
       - '.github/workflows/psmarts-diagnostics.yml'
+      - 'docs/PLAYSTORE-ROOTLESS-ANALYSIS.md'
+      - 'play-services-core/src/main/java/org/microg/gms/auth/**'
+      - 'play-services-core/src/main/java/org/microg/gms/checkin/**'
+      - 'play-services-base/core/src/main/java/org/microg/gms/common/HttpFormClient.java'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: psmarts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+  diagnostics:
+    name: Offline diagnostics and privacy (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@v4
-      - name: Run pure Python unit tests (no ADB, no secrets)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test parsers, read-only collection, private output and Java credential handling
         run: python3 -m unittest discover -s tools/psmarts-diagnostics/tests -v
+
+  huawei-build:
+    name: Huawei variant build and existing CryptoTest
+    # PR/dispatch build verifies the Huawei signature code. Push tests stay cheap.
+    if: github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Set up pinned Android build prerequisites
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '13114758'
+          packages: 'platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: 'false'
+      - name: Build VtmHuaweiDebug and run existing unit tests
+        id: build
+        run: >-
+          bash ./gradlew --no-daemon --no-configuration-cache --configure-on-demand --max-workers=2
+          :play-services-nearby-core:testDebugUnitTest
+          :play-services-core:assembleVtmHuaweiDebug
+      - name: Verify Huawei components and debug APK signature
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, subprocess, xml.etree.ElementTree as ET
+          sdk = pathlib.Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0'
+          apks = list(pathlib.Path('play-services-core/build/outputs/apk/vtmHuawei/debug').glob('*.apk'))
+          assert apks, 'No Huawei APK produced'
+          for apk in apks:
+              subprocess.run([str(sdk / 'apksigner'), 'verify', str(apk)], check=True)
+              result = subprocess.run([str(sdk / 'aapt2'), 'dump', 'xmltree', str(apk), '--file', 'AndroidManifest.xml'], check=True, capture_output=True, text=True)
+              for component in ('SignatureService', 'InitProvider', 'InitReceiver'):
+                  assert 'com.huawei.signature.diff.' + component in result.stdout, component
+          reports = list(pathlib.Path('play-services-nearby/core/build/test-results/testDebugUnitTest').glob('TEST-*.xml'))
+          assert reports, 'No current unit-test XML produced'
+          suites = [ET.parse(report).getroot() for report in reports]
+          assert sum(int(suite.get('tests', '0')) for suite in suites) > 0, 'No tests executed'
+          assert all(int(suite.get(key, '0')) == 0 for suite in suites for key in ('failures', 'errors', 'skipped'))
+          print('Huawei components, APK signature and nonempty unit-test results verified; firmware support remains untested.')
+          PY
+      - name: Upload test XML (synthetic tests only; never device logs)
+        if: always() && steps.build.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: psmarts-crypto-test-results
+          path: play-services-nearby/core/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: error
+          retention-days: 7

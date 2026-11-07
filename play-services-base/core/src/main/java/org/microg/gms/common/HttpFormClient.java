@@ -80,7 +80,7 @@ public class HttpFormClient {
             }
         }
 
-        Log.d(TAG, "-- Request --\n" + content);
+        Log.d(TAG, "Sending form request");
         String replace = content.toString().trim().replace("\n", "");
         OutputStream os = connection.getOutputStream();
         os.write(replace.trim().getBytes());
@@ -97,7 +97,7 @@ public class HttpFormClient {
         }
 
         String result = new String(Utils.readStreamToEnd(connection.getInputStream()));
-        Log.d(TAG, "-- Response --\n" + result);
+        Log.d(TAG, "Received form response");
         return parseResponse(tClass, connection, result);
     }
 
@@ -157,10 +157,10 @@ public class HttpFormClient {
                     }
                 }
             } catch (Exception e) {
-                Log.w(TAG, e);
+                Log.w(TAG, "Could not assign response field");
             }
             if (!matched) {
-                Log.w(TAG, "Response line '" + s + "' not processed");
+                Log.w(TAG, "Unrecognized response field");
             }
         }
         for (Field field : tClass.getDeclaredFields()) {
@@ -180,7 +180,7 @@ public class HttpFormClient {
                         field.setInt(response, Integer.parseInt(value));
                     }
                 } catch (Exception e) {
-                    Log.w(TAG, e);
+                    Log.w(TAG, "Could not assign response field");
                 }
             }
             if (field.isAnnotationPresent(ResponseStatusCode.class) && field.getType() == int.class) {
@@ -188,7 +188,7 @@ public class HttpFormClient {
                     field.setAccessible(true);
                     field.setInt(response, connection.getResponseCode());
                 } catch (IllegalAccessException e) {
-                    Log.w(TAG, e);
+                    Log.w(TAG, "Could not assign response field");
                 }
             }
             if (field.isAnnotationPresent(ResponseStatusText.class) && field.getType() == String.class) {
@@ -196,7 +196,7 @@ public class HttpFormClient {
                     field.setAccessible(true);
                     field.set(response, connection.getResponseMessage());
                 } catch (IllegalAccessException e) {
-                    Log.w(TAG, e);
+                    Log.w(TAG, "Could not assign response field");
                 }
             }
         }
