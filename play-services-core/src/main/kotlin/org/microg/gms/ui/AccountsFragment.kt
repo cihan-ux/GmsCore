@@ -97,8 +97,14 @@ class AccountsFragment : PreferenceFragmentCompat() {
         target: String,
     ) {
         try {
+            val before = manager.getAccountVisibility(account, packageName)
             val updated = manager.setAccountVisibility(account, packageName, visibility)
-            if (!updated) Log.i(TAG, "No account visibility change applied for $target")
+            val after = manager.getAccountVisibility(account, packageName)
+            // Do not log the account name, email, or auth tokens.
+            Log.i(TAG, "$target visibility: before=$before requested=$visibility after=$after applied=$updated")
+            if (!updated || after != visibility) {
+                Log.w(TAG, "Google account visibility was not confirmed for $target")
+            }
         } catch (e: RuntimeException) {
             // A missing client package or vendor-specific AccountManager behavior
             // should not prevent visibility updates for other accounts.
