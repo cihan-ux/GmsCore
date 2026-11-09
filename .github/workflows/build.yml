@@ -70,7 +70,9 @@ jobs:
           import hashlib
           import json
           from pathlib import Path
+          import re
           import shutil
+          import subprocess
 
           output_root = Path("play-services-core/build/outputs/apk")
           artifact_root = Path("huawei-debug-artifact")
@@ -92,9 +94,18 @@ jobs:
                   destination = artifact_root / apk.name
                   shutil.copy2(apk, destination)
                   digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+                  cert_result = subprocess.run(
+                      ["keytool", "-printcert", "-jarfile", str(destination)],
+                      capture_output=True, text=True, check=True
+                  )
+                  cert_match = re.search(r"SHA256:\s*([0-9A-Fa-f:]+)", cert_result.stdout)
+                  if not cert_match:
+                      raise SystemExit("APK signer SHA-256 not found; refusing to publish")
+                  signer_sha256 = cert_match.group(1).replace(":", "").lower()
                   collected.append({
                       "file": destination.name,
                       "sha256": digest,
+                      "signerCertificateSha256": signer_sha256,
                       "variant": data["variantName"],
                       "applicationId": data["applicationId"],
                       "versionName": data.get("versionName"),
