@@ -62,3 +62,41 @@ jobs:
         run: "./gradlew assemble${{ matrix.target }}"
       - name: "Execute Gradle lint"
         run: "./gradlew lint${{ matrix.target }}"
+
+      - name: "Collect experimental Huawei APK"
+        if: matrix.target == 'Debug'
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import shutil
+
+          output_root = Path("play-services-core/build/outputs/apk")
+          artifact_root = Path("huawei-debug-artifact")
+          artifact_root.mkdir(exist_ok=True)
+          collected = []
+          for metadata in output_root.rglob("output-metadata.json"):
+              data = json.loads(metadata.read_text(encoding="utf-8"))
+              if data.get("variantName") != "mapboxHuaweiDebug":
+                  continue
+              for element in data.get("elements", []):
+                  filename = element.get("outputFile")
+                  if not filename:
+                      continue
+                  apk = metadata.parent / filename
+                  if apk.is_file():
+                      destination = artifact_root / apk.name
+                      shutil.copy2(apk, destination)
+                      collected.append(str(apk))
+          if not collected:
+              raise SystemExit("No mapboxHuaweiDebug APK was found; failing rather than uploading a wrong flavor")
+          print("Collected Huawei debug variant APK:", *collected, sep="\\n")
+          PY
+      - name: "Upload experimental Huawei APK"
+        if: matrix.target == 'Debug'
+        uses: actions/upload-artifact@v4
+        with:
+          name: microg-huawei-account-visibility-mapbox-debug
+          path: huawei-debug-artifact/*.apk
+          if-no-files-found: error
+          retention-days: 7
