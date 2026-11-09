@@ -85,7 +85,7 @@ class AccountsFragment : PreferenceFragmentCompat() {
             }
         } catch (e: RuntimeException) {
             // A vendor-modified AccountManager must not crash the settings screen.
-            Log.w(TAG, "Unable to enumerate Google accounts for visibility update", e)
+            Log.w(TAG, "Unable to enumerate Google accounts for visibility update (${e.javaClass.simpleName})")
         }
     }
 
@@ -108,7 +108,7 @@ class AccountsFragment : PreferenceFragmentCompat() {
         } catch (e: RuntimeException) {
             // A missing client package or vendor-specific AccountManager behavior
             // should not prevent visibility updates for other accounts.
-            Log.w(TAG, "Unable to update account visibility for $target", e)
+            Log.w(TAG, "Unable to update account visibility for $target (${e.javaClass.simpleName})")
         }
     }
 
