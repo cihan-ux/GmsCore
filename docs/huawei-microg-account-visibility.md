@@ -10,8 +10,12 @@ process, but not when the setting is enabled later. Accounts created before enab
 the setting may remain invisible to applications that enumerate `com.google` accounts.
 
 Implementation:
+- For the opt-in `Auth.VISIBLE` toggle, also set explicit per-package account visibility
+  for the stable Android Chrome package (`com.android.chrome`). Modern Chrome may not
+  rely on the pre-Android-O legacy visibility key. This is experimental and limited to
+  Chrome, not a grant to all installed applications.
 - Setting enabled: set `VISIBILITY_USER_MANAGED_VISIBLE` for pre-existing `com.google` accounts.
-- Setting disabled: restore `VISIBILITY_UNDEFINED` (the platform default) for that key.
+- Setting disabled: restore `VISIBILITY_UNDEFINED` (the platform default) for the legacy and Chrome keys.
 - Skip Android versions before API 26.
 - Log AccountManager errors without logging account names or credentials.
 
@@ -32,10 +36,14 @@ Related upstream report: https://github.com/microg/GmsCore/issues/3805
 2. Add a `com.google` account while **Allow apps to find accounts** is disabled.
 3. Confirm a test app relying on `getAccountsByType("com.google")` cannot enumerate it.
 4. Enable **Allow apps to find accounts** after account creation.
+   Check Android 8+ account visibility separately for the legacy key and `com.android.chrome`.
+   Do not log email addresses or access tokens.
 5. Confirm the test app can now enumerate the account without removing/re-adding it.
 6. Disable the setting. Confirm visibility returns to the platform default.
 7. Repeat on Android 8+ and verify Android 7 or older does not call the new API.
 8. Compare separately with Chrome account picker and microG Self-Check on the test device.
+9. Confirm that if Chrome is not installed, the setting still updates the legacy key and does not crash.
+10. Confirm that disabling the toggle resets the Chrome-specific visibility override.
 
 ## Build
 GitHub Actions workflow:
