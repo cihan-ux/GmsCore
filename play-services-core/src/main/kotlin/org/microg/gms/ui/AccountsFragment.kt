@@ -63,16 +63,46 @@ class AccountsFragment : PreferenceFragmentCompat() {
 
         try {
             for (account in manager.getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE)) {
-                val updated = manager.setAccountVisibility(
+                // Existing pre-Android-O clients rely on the legacy visibility key.
+                setVisibilitySafely(
+                    manager,
                     account,
                     AccountManager.PACKAGE_NAME_KEY_LEGACY_NOT_VISIBLE,
                     visibility,
+                    "legacy clients",
                 )
-                if (!updated) Log.w(TAG, "Could not update Google account visibility")
+
+                // Modern Chrome targets Android O+ and may not consult the legacy key.
+                // Only update its explicit account visibility when the user changes the
+                // existing "Allow apps to find accounts" setting; do not grant all apps access.
+                setVisibilitySafely(
+                    manager,
+                    account,
+                    CHROME_PACKAGE_NAME,
+                    visibility,
+                    "Chrome",
+                )
             }
         } catch (e: RuntimeException) {
             // A vendor-modified AccountManager must not crash the settings screen.
-            Log.w(TAG, "Unable to update legacy Google account visibility", e)
+            Log.w(TAG, "Unable to enumerate Google accounts for visibility update", e)
+        }
+    }
+
+    private fun setVisibilitySafely(
+        manager: AccountManager,
+        account: Account,
+        packageName: String,
+        visibility: Int,
+        target: String,
+    ) {
+        try {
+            val updated = manager.setAccountVisibility(account, packageName, visibility)
+            if (!updated) Log.i(TAG, "No account visibility change applied for $target")
+        } catch (e: RuntimeException) {
+            // A missing client package or vendor-specific AccountManager behavior
+            // should not prevent visibility updates for other accounts.
+            Log.w(TAG, "Unable to update account visibility for $target", e)
         }
     }
 
@@ -194,6 +224,7 @@ class AccountsFragment : PreferenceFragmentCompat() {
 
     companion object {
         private const val TAG = "GmsAccountSettings"
+        private const val CHROME_PACKAGE_NAME = "com.android.chrome"
         private const val MENU_GAMES_MANAGED = Menu.FIRST
         private const val MENU_PASSKEY_MANAGER = Menu.FIRST + 1
     }
