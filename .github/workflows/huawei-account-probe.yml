@@ -36,17 +36,29 @@ jobs:
           "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
       - name: Build read-only standalone diagnostics APK
         run: gradle -p experiments/huawei-account-probe --no-daemon :app:assembleDebug
-      - name: Verify output and print digest
+      - name: Verify Android signing, package identity and digest
         run: |
           set -euo pipefail
           APK=experiments/huawei-account-probe/app/build/outputs/apk/debug/app-debug.apk
+          BT="$ANDROID_HOME/build-tools/35.0.0"
           test -s "$APK"
-          sha256sum "$APK"
-          keytool -printcert -jarfile "$APK" | grep -E 'Owner:|SHA256:'
-      - name: Upload independent APK
+          "$BT/apksigner" verify --verbose --print-certs "$APK"
+          "$BT/aapt" dump badging "$APK" | grep -q "^package: name='dev.cihan.microg.accountprobe'"
+          sha256sum "$APK" | tee experiments/huawei-account-probe/app/build/outputs/apk/debug/SHA256SUMS.txt
+          printf '%s\n' \
+            'EXPERIMENTAL READ-ONLY PROBE' \
+            'Package: dev.cihan.microg.accountprobe' \
+            'This does not replace microG, sign in to Google, or test Chrome directly.' \
+            'Only reports Google-account count visible to this diagnostic app; optional GET_ACCOUNTS permission.' \
+            'No root, account modification, network permission or signature spoofing.' \
+            > experiments/huawei-account-probe/app/build/outputs/apk/debug/README-READONLY.txt
+      - name: Upload independent APK and verification files
         uses: actions/upload-artifact@v4
         with:
           name: huawei-account-probe-readonly-debug
-          path: experiments/huawei-account-probe/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            experiments/huawei-account-probe/app/build/outputs/apk/debug/app-debug.apk
+            experiments/huawei-account-probe/app/build/outputs/apk/debug/SHA256SUMS.txt
+            experiments/huawei-account-probe/app/build/outputs/apk/debug/README-READONLY.txt
           if-no-files-found: error
           retention-days: 14
