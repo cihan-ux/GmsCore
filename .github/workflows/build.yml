@@ -116,10 +116,10 @@ jobs:
               json.dumps(collected, indent=2), encoding="utf-8"
           )
           (artifact_root / "DO-NOT-INSTALL-ON-PRIMARY-PHONE.txt").write_text(
-              "EXPERIMENTAL BUILD - NOT TESTED ON HUAWEI AQM-LX1.\\n"
-              "Not signed with your existing microG signing key.\\n"
-              "Do not uninstall your working microG installation to try this build.\\n"
-              "This does not enable EMUI signature spoofing or guarantee Chrome login.\\n",
+              "EXPERIMENTAL BUILD - NOT TESTED ON HUAWEI AQM-LX1.\n"
+              "Not signed with your existing microG signing key.\n"
+              "Do not uninstall your working microG installation to try this build.\n"
+              "This does not enable EMUI signature spoofing or guarantee Chrome login.\n",
               encoding="utf-8",
           )
           print("Verified Huawei debug outputs:", json.dumps(collected, indent=2))
