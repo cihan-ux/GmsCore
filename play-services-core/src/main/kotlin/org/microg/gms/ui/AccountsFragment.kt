@@ -9,6 +9,8 @@ import android.accounts.Account
 import android.accounts.AccountManager
 import android.content.Intent
 import android.graphics.Bitmap
+import android.os.Build
+import android.util.Log
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Menu
@@ -47,6 +49,33 @@ val TWO_STATE_SETTINGS = listOf(
 
 class AccountsFragment : PreferenceFragmentCompat() {
 
+    // Android 8+ retains per-account visibility independently from the microG preference.
+    // Accounts created before the setting was enabled need their visibility updated here.
+    private fun updateExistingAccountVisibility(visible: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+        val manager = AccountManager.get(requireContext())
+        val visibility = if (visible) {
+            AccountManager.VISIBILITY_USER_MANAGED_VISIBLE
+        } else {
+            AccountManager.VISIBILITY_UNDEFINED
+        }
+
+        try {
+            for (account in manager.getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE)) {
+                val updated = manager.setAccountVisibility(
+                    account,
+                    AccountManager.PACKAGE_NAME_KEY_LEGACY_NOT_VISIBLE,
+                    visibility,
+                )
+                if (!updated) Log.w(TAG, "Could not update Google account visibility")
+            }
+        } catch (e: RuntimeException) {
+            // A vendor-modified AccountManager must not crash the settings screen.
+            Log.w(TAG, "Unable to update legacy Google account visibility", e)
+        }
+    }
+
     // TODO: This should use some better means of accessing the database
     private fun getDisplayName(account: Account): String? {
         val databaseHelper = DatabaseHelper(context)
@@ -80,6 +109,7 @@ class AccountsFragment : PreferenceFragmentCompat() {
                 if (newValue is Boolean && preference.key in TWO_STATE_SETTINGS) {
                     SettingsContract.setSettings(requireContext(), Auth.getContentUri(requireContext())) { put(preference.key, newValue) }
                     updateSettings()
+                    if (preference.key == Auth.VISIBLE) updateExistingAccountVisibility(newValue)
                     if (preference.key == Auth.TWO_STEP_VERIFICATION && newValue) registerGcmInGms()
                     if (preference.key == Auth.FIND_DEVICES && newValue) registerGcmInGms()
                     true
@@ -163,6 +193,7 @@ class AccountsFragment : PreferenceFragmentCompat() {
     }
 
     companion object {
+        private const val TAG = "GmsAccountSettings"
         private const val MENU_GAMES_MANAGED = Menu.FIRST
         private const val MENU_PASSKEY_MANAGER = Menu.FIRST + 1
     }
