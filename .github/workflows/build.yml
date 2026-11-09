@@ -67,6 +67,7 @@ jobs:
         if: matrix.target == 'Debug'
         run: |
           python3 - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
           import shutil
@@ -79,24 +80,44 @@ jobs:
               data = json.loads(metadata.read_text(encoding="utf-8"))
               if data.get("variantName") != "mapboxHuaweiDebug":
                   continue
+              if data.get("applicationId") != "com.google.android.gms":
+                  raise SystemExit("Unexpected package ID in Huawei build metadata; refusing to publish")
               for element in data.get("elements", []):
                   filename = element.get("outputFile")
                   if not filename:
                       continue
                   apk = metadata.parent / filename
-                  if apk.is_file():
-                      destination = artifact_root / apk.name
-                      shutil.copy2(apk, destination)
-                      collected.append(str(apk))
+                  if not apk.is_file():
+                      raise SystemExit("Huawei output metadata refers to missing APK: " + filename)
+                  destination = artifact_root / apk.name
+                  shutil.copy2(apk, destination)
+                  digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+                  collected.append({
+                      "file": destination.name,
+                      "sha256": digest,
+                      "variant": data["variantName"],
+                      "applicationId": data["applicationId"],
+                      "versionName": data.get("versionName"),
+                  })
           if not collected:
-              raise SystemExit("No mapboxHuaweiDebug APK was found; failing rather than uploading a wrong flavor")
-          print("Collected Huawei debug variant APK:", *collected, sep="\\n")
+              raise SystemExit("No mapboxHuaweiDebug APK was found; refusing to publish a different flavor")
+          (artifact_root / "build-manifest.json").write_text(
+              json.dumps(collected, indent=2), encoding="utf-8"
+          )
+          (artifact_root / "DO-NOT-INSTALL-ON-PRIMARY-PHONE.txt").write_text(
+              "EXPERIMENTAL BUILD - NOT TESTED ON HUAWEI AQM-LX1.\\n"
+              "Not signed with your existing microG signing key.\\n"
+              "Do not uninstall your working microG installation to try this build.\\n"
+              "This does not enable EMUI signature spoofing or guarantee Chrome login.\\n",
+              encoding="utf-8",
+          )
+          print("Verified Huawei debug outputs:", json.dumps(collected, indent=2))
           PY
       - name: "Upload experimental Huawei APK"
         if: matrix.target == 'Debug'
         uses: actions/upload-artifact@v4
         with:
           name: microg-huawei-account-visibility-mapbox-debug
-          path: huawei-debug-artifact/*.apk
+          path: huawei-debug-artifact/*
           if-no-files-found: error
           retention-days: 7
