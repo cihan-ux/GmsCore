@@ -54,3 +54,45 @@ Gradle task:
 
 The workflow attempts to upload a debug APK under the artifact name
 `microg-huawei-account-visibility-debug` after successful compilation.
+
+## 2026-11-09: build and signing audit
+
+The `mapboxHuaweiDebug` APK was successfully built in GitHub Actions
+run 42615774413, and the variant was confirmed in its build log.
+Run 42616836998 produced a ZIP with a manifest containing the application ID
+and APK SHA-256. These prove packaging, **not** that Google Chrome login works.
+
+**The independent read-only signature diagnostics APK already exists in PR #8**:
+https://github.com/cihan-ux/GmsCore/pull/8
+Its own successful workflow is:
+https://github.com/cihan-ux/GmsCore/actions/runs/42434974136
+Download the `fakegapps-p-smart-s-experimental-apks` artifact and use **only**
+`diagnostics/build/outputs/apk/debug/diagnostics-debug.apk` for this audit.
+Do not install `module-debug.apk` or `probe-debug.apk` merely to do the audit.
+
+### Safe order for a device (root/bootloader unlock NOT required)
+1. **Do not uninstall or clear data for the installed microG**. Keep the account
+   and current notifications intact.
+2. Optionally install the separate `dev.cihan.fakegapps.diagnostics` read-only
+   diagnostics APK from PR #8. It uses its *own* application ID, and does not replace
+   `com.google.android.gms`. Inspect its source before installation.
+3. Read `GET_SIGNING_CERTIFICATES` for installed
+   `com.google.android.gms` and record the SHA-256 certificate fingerprint.
+   This fingerprint is **not** the APK file's SHA-256; they are different values.
+4. Compare it with `signerCertificateSha256` in the *same build's* experimental
+   ZIP `build-manifest.json`. Do not compare to the fingerprint from another run:
+   ephemeral CI debug keys can change from run to run.
+5. If signing certificates do not match, an Android package update over the
+   existing microG is refused. **Stop here; do not uninstall or bypass this.**
+6. If they match, the APK still has not been verified on AQM-LX1; the Chrome
+   account picker and signature spoofing require separate device-level tests.
+
+### Interpretation
+- A signature mismatch is a **package update blocker**, not evidence that the
+  Android Framework's signature spoofing works or does not work.
+- The PR #8 diagnostic APK measures package signatures and PackageManager API
+  behavior. It does **not** read account names, emails or Google tokens, and
+  it does **not** directly measure `AccountManager`'s per-app visibility for Chrome.
+- The v1 patch in PR #11 updates `AccountManager` visibility but does **not**
+  implement privileged EMUI framework signature spoofing.
+- Do not claim Chrome login is fixed until observed on a test device. 
