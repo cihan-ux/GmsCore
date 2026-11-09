@@ -96,19 +96,27 @@ class AccountsFragment : PreferenceFragmentCompat() {
         visibility: Int,
         target: String,
     ) {
+        // Write first: some vendor AccountManager implementations can reject readback,
+        // even if their visibility setter works. Readback is diagnostic, not a gate.
+        val updated = try {
+            manager.setAccountVisibility(account, packageName, visibility)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Could not write visibility for $target (${e.javaClass.simpleName})")
+            return
+        }
+        if (!updated) {
+            Log.w(TAG, "Android refused account visibility update for $target")
+            return
+        }
         try {
-            val before = manager.getAccountVisibility(account, packageName)
-            val updated = manager.setAccountVisibility(account, packageName, visibility)
             val after = manager.getAccountVisibility(account, packageName)
             // Do not log the account name, email, or auth tokens.
-            Log.i(TAG, "$target visibility: before=$before requested=$visibility after=$after applied=$updated")
-            if (!updated || (visibility != AccountManager.VISIBILITY_UNDEFINED && after != visibility)) {
-                Log.w(TAG, "Google account visibility was not confirmed for $target")
+            Log.i(TAG, "$target visibility: requested=$visibility after=$after applied=true")
+            if (visibility != AccountManager.VISIBILITY_UNDEFINED && after != visibility) {
+                Log.w(TAG, "Google account visibility readback does not match for $target")
             }
         } catch (e: RuntimeException) {
-            // A missing client package or vendor-specific AccountManager behavior
-            // should not prevent visibility updates for other accounts.
-            Log.w(TAG, "Unable to update account visibility for $target (${e.javaClass.simpleName})")
+            Log.i(TAG, "Visibility write accepted for $target; readback unavailable (${e.javaClass.simpleName})")
         }
     }
 
