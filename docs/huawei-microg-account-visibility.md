@@ -95,4 +95,66 @@ Do not install `module-debug.apk` or `probe-debug.apk` merely to do the audit.
   it does **not** directly measure `AccountManager`'s per-app visibility for Chrome.
 - The v1 patch in PR #11 updates `AccountManager` visibility but does **not**
   implement privileged EMUI framework signature spoofing.
-- Do not claim Chrome login is fixed until observed on a test device. 
+- Do not claim Chrome login is fixed until observed on a test device.
+
+## 2026-11-12: Huawei AQM-LX1 Account Probe v0.3 observations
+
+User-supplied read-only results (no account identifiers recorded):
+
+- Device: Huawei AQM-LX1, Android API 29 (EMUI 12).
+- Installed GMS package: `com.google.android.gms` v0.3.17.252432-hw, enabled.
+- Stable Chrome: `com.android.chrome` v157.0.8103.50, enabled.
+- Play Store package `com.android.vending` present and enabled.
+- Google authenticator: `com.google.android.gms`.
+- One Google account visible **to the independent diagnostic package**
+  `dev.cihan.microg.accountprobe`, with its own `GET_ACCOUNTS` permission granted.
+- Chrome `GET_ACCOUNTS`: declared but not granted; `GET_ACCOUNTS_PRIVILEGED`:
+  not requested.
+- HTTPS handler inventory from this independent probe listed
+  `com.brave.browser`; that does **not** mean Chrome was absent, because
+  a separate PackageManager query confirmed Chrome installed and enabled.
+- Tapping the Chrome profile icon displayed Chrome's settings and Google
+  services controls. **No Google account chooser appeared** in the user's
+  screenshots. Chrome setting to permit sign-in was enabled.
+
+### Interpretation and boundaries
+
+The denied `GET_ACCOUNTS` permission is a **diagnostic observation, not a
+confirmed root cause**. Android's documented `AccountManager.getAccountsByType`
+behavior for apps targeting Android O (API 26) or newer does not use this
+permission to determine which accounts are returned; per-app visibility set
+by the authenticator or user authorization governs the result.
+Source: https://developer.android.com/reference/android/accounts/AccountManager
+
+- Probe visibility of one account **does not** establish visibility to Chrome.
+- Independent apps cannot call `getAccountVisibility(account, "com.android.chrome")`
+  or `getAccountsAndVisibilityForPackage` as the real `com.google`
+  authenticator; these APIs require signature matching with the authenticator.
+- The patch in this PR supplies an *experimental* Chrome-specific
+  `setAccountVisibility` update from microG settings, but the test build
+  is signed with a CI debug key. It is not a verified in-place replacement
+  for the existing microG installation.
+- An app-visible account, Chrome account picker, token acquisition, and
+  framework signature spoofing are distinct test targets.
+- Do not suggest forcing `pm grant` or uninstalling/reinstalling microG
+  solely on the basis of Chrome's denied `GET_ACCOUNTS` permission.
+
+### Next safe investigation
+
+1. Record (without email or tokens) whether microG's own **Allow apps to
+   find accounts** setting is enabled on the unchanged installation.
+2. If available, use a *redacted* Android log around Chrome's attempted
+   sign-in to differentiate "no attempt made" from `AccountManager` or
+   `PackageManager` access-denied events. Do not share raw logcat dumps
+   containing URLs, emails, cookies, or auth tokens.
+3. With a disposable test ROM/environment where the microG signing key is
+   controlled, run the Chrome-specific visibility patch and compare
+   permission-independent account visibility and Chrome's sign-in behavior.
+4. Independently confirm signature spoofing in microG Self-Check. A failed
+   spoofing check is not fixed by the AccountManager patch alone.
+
+### Do not overstate
+
+**Chrome login remains unverified and unresolved on the reported Huawei.**
+The goal of the next test is to identify which component is failing without
+touching the user's functional microG installation.
