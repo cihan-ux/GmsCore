@@ -79,7 +79,7 @@ public final class MainActivity extends Activity {
 
     private void refreshReport() {
         StringBuilder output = new StringBuilder();
-        output.append("microG Account Probe v0.2\\n")
+        output.append("microG Account Probe v0.3\\n")
               .append("Yalnızca okuma / İnternet izni yok\\n\\n")
               .append("Cihaz: ").append(Build.MANUFACTURER)
               .append(" ").append(Build.MODEL)
@@ -95,6 +95,8 @@ public final class MainActivity extends Activity {
         appendInstalledPackage(output, pm, "org.chromium.chrome", "Chromium");
         appendInstalledPackage(output, pm, "com.android.vending", "Play Store");
         output.append("\\n");
+        appendChromeAccountPermissions(output, pm);
+        output.append("\\n");
         appendWebHandlers(output, pm);
         output.append("\\n");
 
@@ -104,6 +106,8 @@ public final class MainActivity extends Activity {
             for (AuthenticatorDescription authenticator : accounts.getAuthenticatorTypes()) {
                 if (GOOGLE_ACCOUNT_TYPE.equals(authenticator.type)) {
                     googleAuthenticatorPresent = true;
+                    output.append("Google hesap sağlayıcı paketi: ")
+                          .append(authenticator.packageName).append("\\n");
                     break;
                 }
             }
@@ -158,6 +162,57 @@ public final class MainActivity extends Activity {
                .append(error.getClass().getSimpleName()).append(")\\n");
         }
     }
+    // These are package-declared permissions, NOT the accounts exposed to Chrome.
+    // This independent app cannot impersonate Chrome or inspect its private account picker.
+    private static void appendChromeAccountPermissions(StringBuilder out, PackageManager pm) {
+        out.append("Chrome hesap erişimi izin tanısı:\\n");
+        final String packageName = "com.android.chrome";
+        try {
+            PackageInfo chrome = pm.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS);
+            appendPermissionStatus(out, pm, chrome, packageName, Manifest.permission.GET_ACCOUNTS);
+            appendPermissionStatus(
+                out, pm, chrome, packageName, "android.permission.GET_ACCOUNTS_PRIVILEGED");
+        } catch (PackageManager.NameNotFoundException error) {
+            out.append("  Chrome paketi bulunamadı; izinler incelenemiyor.\\n");
+        } catch (RuntimeException error) {
+            out.append("  İzin sorgusu başarısız (")
+               .append(error.getClass().getSimpleName()).append(")\\n");
+        }
+        out.append("NOT: İzin verilmiş olsa bile Chrome'un Google hesabını ")
+           .append("veya oturum açma hizmetlerini kullanabildiği kanıtlanmaz.\\n");
+    }
+
+    private static void appendPermissionStatus(
+            StringBuilder out, PackageManager pm, PackageInfo info, String pkg, String permission) {
+        boolean requested = false;
+        boolean grantedByFlags = false;
+        if (info.requestedPermissions != null) {
+            for (int i = 0; i < info.requestedPermissions.length; i++) {
+                if (permission.equals(info.requestedPermissions[i])) {
+                    requested = true;
+                    grantedByFlags = info.requestedPermissionsFlags != null
+                        && i < info.requestedPermissionsFlags.length
+                        && (info.requestedPermissionsFlags[i]
+                           & PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0;
+                    break;
+                }
+            }
+        }
+
+        String shortName = permission.substring("android.permission.".length());
+        out.append("  ").append(shortName).append(": ");
+        if (!requested) {
+            out.append("manifestte istenmemiş\\n");
+        } else {
+            boolean granted = pm.checkPermission(permission, pkg) ==
+                PackageManager.PERMISSION_GRANTED;
+            out.append(granted ? "İZİN VAR" : "İZİN YOK")
+               .append(" (manifest grant=")
+               .append(grantedByFlags ? "evet" : "hayır")
+               .append(")\\n");
+        }
+    }
+
     private static void appendWebHandlers(StringBuilder out, PackageManager pm) {
         out.append("HTTPS bağlantısı açabilen paketler (en fazla 12):\\n");
         try {
