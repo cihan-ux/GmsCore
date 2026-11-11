@@ -53,3 +53,34 @@ The CI debug signing key may be different between workflow runs. If Android repo
 an incompatible package signature when updating v0.1 to v0.2, it is safe to uninstall
 **only this independent Account Probe app** and install the v0.2 APK. The probe has
 no stored Google credentials. Never uninstall or clear data for microG itself.
+
+## v0.3 Chrome permissions diagnostics (2026-11-12)
+
+The user's Huawei AQM-LX1, Android API 29, reports one `com.google` account
+visible to the independent v0.1 probe, while Chrome 157 shows the Google
+services settings screen rather than an account picker when the profile icon
+is tapped. **These observations do not prove that Chrome has access to the
+account or that Chrome even sends an auth request.**
+
+This update prints the package hosting Android's `com.google` authenticator
+and checks whether the installed stable Chrome package **requests** and is
+**granted** `android.permission.GET_ACCOUNTS` and
+`android.permission.GET_ACCOUNTS_PRIVILEGED`. It also retains the v0.2
+package/HTTPS handler inventory.
+
+Interpretation:
+- If Chrome does not request a permission, this is **not automatically a bug**:
+  modern Android account visibility may be provided by the authenticator or
+  through user approval, independent of GET_ACCOUNTS.
+- Even when GET_ACCOUNTS is granted, the result **does not show which accounts
+  Chrome sees**. Chrome's own account selection, OAuth, and native sync remain
+  separate from permission grants.
+- This diagnostic does not install or patch the experimental microG APK,
+  apply framework signature spoofing, or modify the user's Google account.
+- On Android 10/EMUI, package permissions can be inspected without root,
+  but some OEM-specific policies remain inaccessible to third-party apps.
+
+To update: install the v0.3 `app-debug.apk` from the matching successful CI
+artifact. If Android refuses an in-place update due to a different CI signing
+key, remove **only** `dev.cihan.microg.accountprobe` (not microG or Chrome)
+and install v0.3. Do not clear Google/Chrome/microG data.
