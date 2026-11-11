@@ -5,6 +5,10 @@ import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.accounts.AuthenticatorDescription;
 import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -14,11 +18,14 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 /**
  * Standalone, read-only visibility probe.
  *
  * This app only sees accounts visible to ITS OWN package, not Chrome.
+ * Browser package presence and web-intent handlers are local, non-privileged queries.
  * It neither invokes getAuthToken nor reads account names/email addresses.
  * No network, file, or account-modification code is present.
  */
@@ -72,7 +79,7 @@ public final class MainActivity extends Activity {
 
     private void refreshReport() {
         StringBuilder output = new StringBuilder();
-        output.append("microG Account Probe v0.1\\n")
+        output.append("microG Account Probe v0.2\\n")
               .append("Yalnızca okuma / İnternet izni yok\\n\\n")
               .append("Cihaz: ").append(Build.MANUFACTURER)
               .append(" ").append(Build.MODEL)
@@ -81,8 +88,14 @@ public final class MainActivity extends Activity {
 
         PackageManager pm = getPackageManager();
         appendInstalledPackage(output, pm, "com.google.android.gms", "microG/GMS");
-        appendInstalledPackage(output, pm, "com.android.chrome", "Chrome");
+        appendInstalledPackage(output, pm, "com.android.chrome", "Chrome (kararlı)");
+        appendInstalledPackage(output, pm, "com.chrome.beta", "Chrome Beta");
+        appendInstalledPackage(output, pm, "com.chrome.dev", "Chrome Dev");
+        appendInstalledPackage(output, pm, "com.chrome.canary", "Chrome Canary");
+        appendInstalledPackage(output, pm, "org.chromium.chrome", "Chromium");
         appendInstalledPackage(output, pm, "com.android.vending", "Play Store");
+        output.append("\\n");
+        appendWebHandlers(output, pm);
         output.append("\\n");
 
         AccountManager accounts = AccountManager.get(this);
@@ -134,7 +147,8 @@ public final class MainActivity extends Activity {
             StringBuilder out, PackageManager pm, String packageName, String label) {
         try {
             PackageInfo info = pm.getPackageInfo(packageName, 0);
-            out.append(label).append(": yüklü");
+            ApplicationInfo appInfo = pm.getApplicationInfo(packageName, 0);
+            out.append(label).append(appInfo.enabled ? ": yüklü / etkin" : ": yüklü / DEVRE DIŞI");
             if (info.versionName != null) out.append(" (").append(info.versionName).append(")");
             out.append("\\n");
         } catch (PackageManager.NameNotFoundException ignored) {
@@ -144,4 +158,36 @@ public final class MainActivity extends Activity {
                .append(error.getClass().getSimpleName()).append(")\\n");
         }
     }
+    private static void appendWebHandlers(StringBuilder out, PackageManager pm) {
+        out.append("HTTPS bağlantısı açabilen paketler (en fazla 12):\\n");
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"));
+            intent.addCategory(Intent.CATEGORY_BROWSABLE);
+            List<ResolveInfo> handlers =
+                pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+            LinkedHashSet<String> packages = new LinkedHashSet<>();
+            for (ResolveInfo handler : handlers) {
+                if (handler.activityInfo != null && handler.activityInfo.packageName != null) {
+                    packages.add(handler.activityInfo.packageName);
+                }
+            }
+            if (packages.isEmpty()) {
+                out.append("  Uygun uygulama görünmedi.\\n");
+            } else {
+                int count = 0;
+                for (String pkg : packages) {
+                    if (count++ >= 12) {
+                        out.append("  ... daha fazlası olabilir\\n");
+                        break;
+                    }
+                    out.append("  ").append(pkg).append("\\n");
+                }
+            }
+            out.append("Bu liste Google hesap görünürlüğünü veya Chrome girişini ölçmez.\\n");
+        } catch (RuntimeException error) {
+            out.append("  Sorgulanamadı (")
+               .append(error.getClass().getSimpleName()).append(")\\n");
+        }
+    }
+
 }
