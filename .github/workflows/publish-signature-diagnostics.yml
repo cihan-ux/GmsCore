@@ -3,7 +3,7 @@ name: Publish P Smart S read-only signature diagnostics APK
 on:
   push:
     branches:
-      - distribution/p-smart-s-signature-diagnostics-v04
+      - distribution/p-smart-s-signature-diagnostics-v05
     paths:
       - ".github/workflows/publish-signature-diagnostics.yml"
       - "experiments/fakegapps-p-smart-s/diagnostics/**"
@@ -51,15 +51,15 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m 1 "^package: name='dev.cihan.fakegapps.diagnostics'"
           mkdir -p downloads
-          cp "$APK" downloads/p-smart-s-signature-diagnostics-v04.apk
-          (cd downloads && sha256sum p-smart-s-signature-diagnostics-v04.apk > p-smart-s-signature-diagnostics-v04.SHA256SUMS.txt)
+          cp "$APK" downloads/p-smart-s-signature-diagnostics-v05.apk
+          (cd downloads && sha256sum p-smart-s-signature-diagnostics-v05.apk > p-smart-s-signature-diagnostics-v05.SHA256SUMS.txt)
           cat > downloads/README-SIGNATURE-DIAGNOSTICS.txt <<'EOF'
           PUBLIC READ-ONLY SIGNATURE DIAGNOSTIC APK FOR HUAWEI P SMART S.
           Package: dev.cihan.fakegapps.diagnostics (not com.google.android.gms)
           No Internet permission, no root, no account or token access.
-          Compare Android's PackageManager reports of Google and Play signatures.
+          Compare Android's PackageManager reports of microG, Play and Chrome certificates.
           Do NOT install FakeGApps module or LSPatch probe APK from other artifacts.
-          This test does NOT enable framework signature spoofing or fix Chrome login.
+          Matching app signatures do NOT prove framework spoofing.\n          Chrome certificate comparison does NOT prove Chrome authenticity or fix login.
           EOF
 
       - name: Publish public direct-download file on this branch
@@ -67,7 +67,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add downloads/p-smart-s-signature-diagnostics-v04.apk downloads/p-smart-s-signature-diagnostics-v04.SHA256SUMS.txt downloads/README-SIGNATURE-DIAGNOSTICS.txt
+          git add downloads/p-smart-s-signature-diagnostics-v05.apk downloads/p-smart-s-signature-diagnostics-v05.SHA256SUMS.txt downloads/README-SIGNATURE-DIAGNOSTICS.txt
           if git diff --cached --quiet; then
             echo 'APK and checksums unchanged'
           else
