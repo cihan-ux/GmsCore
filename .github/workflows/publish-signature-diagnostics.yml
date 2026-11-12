@@ -1,0 +1,76 @@
+name: Publish P Smart S read-only signature diagnostics APK
+
+on:
+  push:
+    branches:
+      - distribution/p-smart-s-signature-diagnostics-v04
+    paths:
+      - ".github/workflows/publish-signature-diagnostics.yml"
+      - "experiments/fakegapps-p-smart-s/diagnostics/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out public distribution branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Configure Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configure Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Install Android SDK 35
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Build ONLY read-only diagnostics (no FakeGApps modules)
+        run: gradle -p experiments/fakegapps-p-smart-s --no-daemon :diagnostics:assembleDebug
+
+      - name: Verify APK package ID and signing
+        run: |
+          set -euo pipefail
+          APK="experiments/fakegapps-p-smart-s/diagnostics/build/outputs/apk/debug/diagnostics-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m 1 "^package: name='dev.cihan.fakegapps.diagnostics'"
+          mkdir -p downloads
+          cp "$APK" downloads/p-smart-s-signature-diagnostics-v04.apk
+          (cd downloads && sha256sum p-smart-s-signature-diagnostics-v04.apk > p-smart-s-signature-diagnostics-v04.SHA256SUMS.txt)
+          cat > downloads/README-SIGNATURE-DIAGNOSTICS.txt <<'EOF'
+          PUBLIC READ-ONLY SIGNATURE DIAGNOSTIC APK FOR HUAWEI P SMART S.
+          Package: dev.cihan.fakegapps.diagnostics (not com.google.android.gms)
+          No Internet permission, no root, no account or token access.
+          Compare Android's PackageManager reports of Google and Play signatures.
+          Do NOT install FakeGApps module or LSPatch probe APK from other artifacts.
+          This test does NOT enable framework signature spoofing or fix Chrome login.
+          EOF
+
+      - name: Publish public direct-download file on this branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add downloads/p-smart-s-signature-diagnostics-v04.apk downloads/p-smart-s-signature-diagnostics-v04.SHA256SUMS.txt downloads/README-SIGNATURE-DIAGNOSTICS.txt
+          if git diff --cached --quiet; then
+            echo 'APK and checksums unchanged'
+          else
+            git commit -m 'Publish standalone read-only signature diagnostics APK'
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
