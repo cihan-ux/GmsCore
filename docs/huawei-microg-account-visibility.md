@@ -192,3 +192,37 @@ account picking or tokens, or add EMUI system signature spoofing.
 
 This was added in response to an already-enabled setting. Do not conclude
 that this setting caused the Chrome sign-in problem without on-device evidence.
+
+## 2026-11-12: account creation and login visibility consistency
+
+Follow-up source inspection identified that `LoginActivity.java` applied only the
+legacy AccountManager visibility override after a Google account was created
+or a GMS token was successfully retrieved. This could leave the explicit
+`com.android.chrome` visibility unset until the Accounts settings screen was
+opened. (It does not prove the Chrome sign-in issue is caused by visibility.)
+
+The experimental branch now calls a common local helper at both successful
+login paths. If **Allow apps to find accounts** is already enabled, it attempts
+to set both `PACKAGE_NAME_KEY_LEGACY_NOT_VISIBLE` and explicit visibility for
+`com.android.chrome`. With the toggle disabled it does nothing, and with
+Android below API 26 it does nothing. A failed OEM AccountManager operation
+is logged without account identifiers and is not allowed to abort login.
+
+The previously added `AccountsFragment.kt` migration path still reconciles
+accounts created before this experiment whenever Accounts settings is opened
+with the toggle already enabled. No account removal or reinstall is needed
+in a controlled signing-compatible test environment.
+
+### Additional regression tests before any release
+
+- Account created through master-token EXTRA_EMAIL/EXTRA_TOKEN route.
+- Account created through standard interactive Google login route.
+- Both login paths with discovery setting on and off.
+- Re-authentication of an existing Google account.
+- AccountManager reporting missing Chrome package or rejecting a visibility write.
+- Verify no account names or authentication tokens appear in newly added logs.
+- Confirm Chrome account-picker behavior independently; visibility alone
+  does not establish OAuth or framework signature spoofing support.
+
+**Status:** Source-only, test build must still pass CI. Experimental APK is
+not an in-place update for the existing microG on the Huawei.
