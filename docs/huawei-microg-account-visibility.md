@@ -158,3 +158,37 @@ Source: https://developer.android.com/reference/android/accounts/AccountManager
 **Chrome login remains unverified and unresolved on the reported Huawei.**
 The goal of the next test is to identify which component is failing without
 touching the user's functional microG installation.
+
+## 2026-11-12: discovery already enabled — automatic reconciliation prototype
+
+User confirmed the installed microG **Allow apps to find accounts** option
+is already enabled on Huawei AQM-LX1. Therefore asking them to toggle it
+again is not useful and does not verify whether Chrome's per-package account
+visibility was previously applied.
+
+**Source change in this branch:** Upon first opening microG Accounts settings,
+the experimental build reads the existing preference. If it is enabled,
+`updateExistingAccountVisibility(true)` reconciles the legacy visibility
+key and Chrome's explicit package visibility for existing Google accounts.
+The switch listener still handles later user-initiated changes. If the
+preference is disabled, no automatic visibility grant is performed.
+
+This is an experimental implementation in the source branch, **not a change
+to the installed Huawei phone**. The CI debug build is signed differently
+from the user's functional microG and must not replace it by uninstalling
+the working package. The patch does not change Chrome's sign-in UI, guarantee
+account picking or tokens, or add EMUI system signature spoofing.
+
+### Validation to perform on a device with matched signing credentials
+
+1. Add a `com.google` account when discovery is disabled; enable it later,
+   without removing/re-adding the account, as the primary migration scenario.
+2. Start the Accounts settings of the patched microG with discovery already
+   enabled and verify both relevant `AccountManager` visibility keys.
+3. Close and reopen Accounts settings and verify operations are idempotent.
+4. Confirm no Chrome-specific override is added if discovery is disabled.
+5. Confirm the switch-off path reverts the explicit overrides.
+6. Finally test actual Chrome account picking and OAuth separately.
+
+This was added in response to an already-enabled setting. Do not conclude
+that this setting caused the Chrome sign-in problem without on-device evidence.
