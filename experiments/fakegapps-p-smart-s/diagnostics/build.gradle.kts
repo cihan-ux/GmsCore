@@ -6,7 +6,7 @@ android {
         applicationId = "dev.cihan.fakegapps.diagnostics"
         minSdk = 29
         targetSdk = 29
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
     }
 }
