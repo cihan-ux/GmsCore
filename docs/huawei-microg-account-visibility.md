@@ -226,3 +226,44 @@ in a controlled signing-compatible test environment.
 
 **Status:** Source-only, test build must still pass CI. Experimental APK is
 not an in-place update for the existing microG on the Huawei.
+
+## 2026-11-12: read-only signing comparison on Huawei AQM-LX1
+
+The user tested the separate v0.4 `dev.cihan.fakegapps.diagnostics` APK
+without patching any app. The Android API 29 package manager returned:
+
+| Check | microG GMS (`com.google.android.gms`) | microG Companion (`com.android.vending`) |
+| --- | --- | --- |
+| GET_SIGNATURES cert SHA-256 | `9bd06727e62796c0130eb6dab39b73157451582cbd138e86c468acc395d14165` | same |
+| GET_SIGNING_CERTIFICATES cert SHA-256 | same | same |
+| On-disk APK archive certificate | same | same |
+
+`PackageManager.checkSignatures(GMS, Play)` returned `MATCH (0)`.
+`hasSigningCertificate(Play, Play cert)` and
+`hasSigningCertificate(GMS, Play cert)` both returned true.
+
+**Key interpretation:** The fingerprint matches documented **microG Team's
+real APK signing certificate** for microG Services and Companion, not a
+demonstration that Android is spoofing Google's proprietary signer.
+Reference examples:
+- https://www.apkmirror.com/apk/microg-team/microg-services-core/microg-services-0-3-15-250932-release/microg-services-0-3-15-250932-android-apk-download/
+- https://www.apkmirror.com/apk/microg-team/fakestore/fakestore-0-3-1-40226-release/microg-companion-0-3-1-40226-android-apk-download/
+
+Because the package manager and on-disk archive agree, this specific test
+did not observe signature substitution for these packages. The result does
+not comprehensively disprove every possible spoofing mechanism (other APIs,
+callers, process hooks, or Google-specific signature checks could differ).
+
+**Chrome's actual installed certificate was not included in v0.4.**
+A separate v0.5 standalone read-only signature diagnostic has been authored
+on `distribution/p-smart-s-signature-diagnostics-v05` to compare Chrome,
+GMS and Companion fingerprints using the same PackageManager APIs.
+
+Chrome's signature mismatch, even if confirmed, is evidence of different
+signing identities, **not by itself proof** that Chrome's authentication
+fails because of this difference. Chrome sign-in still needs device testing.
+
+Do not install experimental CI-signed microG over the user's existing
+official microG signature; do not remove the existing microG account or
+clear Chrome data for this test.
+
