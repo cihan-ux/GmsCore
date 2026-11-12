@@ -5,6 +5,7 @@ on:
       - experiment/huawei-account-visibility-v1
     paths:
       - "play-services-core/src/main/kotlin/org/microg/gms/ui/AccountsFragment.kt"
+      - "play-services-core/src/main/java/org/microg/gms/auth/login/LoginActivity.java"
       - ".github/workflows/huawei-account-visibility-build.yml"
       - "docs/huawei-microg-account-visibility.md"
   workflow_dispatch:
@@ -33,7 +34,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Compile Huawei (Mapbox) debug variant
         run: ./gradlew :play-services-core:assembleMapboxHuaweiDebug --stacktrace
-      - name: Upload unsigned test build
+      - name: Upload experimental debug build (do not install on primary Huawei)
         if: success()
         uses: actions/upload-artifact@v4
         with:
