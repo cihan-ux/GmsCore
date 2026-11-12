@@ -20,22 +20,27 @@ import java.util.Locale;
 public final class MainActivity extends Activity {
     private static final String GMS = "com.google.android.gms";
     private static final String PLAY = "com.android.vending";
+    private static final String CHROME = "com.android.chrome";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         PackageManager pm = getPackageManager();
         StringBuilder report = new StringBuilder();
-        report.append("FakeGApps P Smart S v0.4 — READ ONLY\n")
+        report.append("FakeGApps P Smart S v0.5 — READ ONLY\n")
             .append("Device: ").append(Build.MANUFACTURER).append(" ").append(Build.MODEL)
             .append(" | Android API ").append(Build.VERSION.SDK_INT).append("\n")
             .append("This independent APK is NOT patched by LSPatch.\n\n");
 
         report.append(inspect(pm, GMS)).append("\n\n")
-            .append(inspect(pm, PLAY)).append("\n\n");
+            .append(inspect(pm, PLAY)).append("\n\n")
+            .append(inspect(pm, CHROME)).append("\n\n");
 
         int code = pm.checkSignatures(GMS, PLAY);
         report.append("SYSTEM PackageManager.checkSignatures(GMS, Play): ")
             .append(describeSignatureCode(code)).append(" (").append(code).append(")\n");
+
+        appendPairSignatureCheck(report, pm, GMS, CHROME, "GMS, Chrome");
+        appendPairSignatureCheck(report, pm, PLAY, CHROME, "Play, Chrome");
 
         try {
             PackageInfo playInfo = pm.getPackageInfo(PLAY, PackageManager.GET_SIGNING_CERTIFICATES);
@@ -63,6 +68,45 @@ public final class MainActivity extends Activity {
                 .append(t.getClass().getSimpleName()).append(")\n");
         }
 
+
+        // The Chrome certificate is only a local comparison reference.
+        // This check does not establish whether Chrome is Google-authentic.
+        try {
+            PackageInfo chromeInfo = pm.getPackageInfo(
+                CHROME, PackageManager.GET_SIGNING_CERTIFICATES);
+            SigningInfo chromeSigning = chromeInfo.signingInfo;
+            Signature[] chromeSigners = chromeSigning == null
+                ? null : chromeSigning.getApkContentsSigners();
+            if (chromeSigners != null && chromeSigners.length > 0) {
+                byte[] chromeDigest = MessageDigest.getInstance("SHA-256")
+                    .digest(chromeSigners[0].toByteArray());
+                report.append("SYSTEM hasSigningCertificate(Chrome, Chrome cert): ")
+                    .append(pm.hasSigningCertificate(
+                        CHROME, chromeDigest, PackageManager.CERT_INPUT_SHA256))
+                    .append(" [control]\\n");
+                report.append("SYSTEM hasSigningCertificate(GMS, Chrome cert): ")
+                    .append(pm.hasSigningCertificate(
+                        GMS, chromeDigest, PackageManager.CERT_INPUT_SHA256))
+                    .append("\\n");
+                report.append("SYSTEM hasSigningCertificate(Play, Chrome cert): ")
+                    .append(pm.hasSigningCertificate(
+                        PLAY, chromeDigest, PackageManager.CERT_INPUT_SHA256))
+                    .append("\\n");
+            } else {
+                report.append("Chrome certificate comparison: INCONCLUSIVE (no signer)\\n");
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            report.append("Chrome certificate comparison: INCONCLUSIVE (Chrome not installed)\\n");
+        } catch (Exception e) {
+            report.append("Chrome certificate comparison: INCONCLUSIVE (")
+                .append(e.getClass().getSimpleName()).append(")\\n");
+        }
+
+        report.append("\\nINTERPRETATION: Matching GMS/Play package signatures may be the result ")
+            .append("of the same actual APK signing key. This is not proof of spoofing.\\n")
+            .append("Chrome certificate comparison does not establish Chrome authenticity, ")
+            .append("account access, or why Chrome sign-in fails.\\n");
+
         report.append("\nLIMITS: Read-only local diagnostics. These results do not")
             .append(" reveal the exact Play Store call path, demonstrate download failure")
             .append(" causality, or change any stored signature.\n")
@@ -75,6 +119,22 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.addView(tv);
         setContentView(scroll);
+    }
+
+    private static void appendPairSignatureCheck(
+            StringBuilder report, PackageManager pm, String first,
+            String second, String label) {
+        try {
+            int code = pm.checkSignatures(first, second);
+            report.append("SYSTEM PackageManager.checkSignatures(")
+                .append(label).append("): ")
+                .append(describeSignatureCode(code))
+                .append(" (").append(code).append(")\\n");
+        } catch (RuntimeException e) {
+            report.append("Signature comparison ").append(label)
+                .append(": INCONCLUSIVE (")
+                .append(e.getClass().getSimpleName()).append(")\\n");
+        }
     }
 
     private static String inspect(PackageManager pm, String pkg) {
