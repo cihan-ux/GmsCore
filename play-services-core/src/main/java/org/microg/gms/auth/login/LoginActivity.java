@@ -101,6 +101,7 @@ public class LoginActivity extends AssistantActivity {
     private static final String MAGIC_USER_AGENT = " MinuteMaid";
     private static final String COOKIE_OAUTH_TOKEN = "oauth_token";
     private static final String ACTION_UPDATE_ACCOUNT = "com.google.android.gms.auth.GOOGLE_ACCOUNT_CHANGE";
+    private static final String CHROME_PACKAGE_NAME = "com.android.chrome";
     private static final String PERMISSION_UPDATE_ACCOUNT = "com.google.android.gms.auth.permission.GOOGLE_ACCOUNT_CHANGE";
     private static final int REQUEST_CODE_SIGNUP = 1001;
 
@@ -183,9 +184,8 @@ public class LoginActivity extends AssistantActivity {
                 AccountManager accountManager = AccountManager.get(this);
                 Account account = new Account(getIntent().getStringExtra(EXTRA_EMAIL), accountType);
                 accountManager.addAccountExplicitly(account, getIntent().getStringExtra(EXTRA_TOKEN), null);
-                if (isAuthVisible(this) && SDK_INT >= 26) {
-                    accountManager.setAccountVisibility(account, PACKAGE_NAME_KEY_LEGACY_NOT_VISIBLE, VISIBILITY_USER_MANAGED_VISIBLE);
-                }
+                // Cover accounts created using an existing login token.
+                updateExistingAccountVisibilityForChrome(account);
                 retrieveGmsToken(account);
             } else {
                 retrieveRtToken(getIntent().getStringExtra(EXTRA_TOKEN));
@@ -377,6 +377,30 @@ public class LoginActivity extends AssistantActivity {
                 });
     }
 
+    // Explicit Chrome visibility is separate from the legacy Android visibility key.
+    // This is an opt-in compatibility experiment: only apply while the user's
+    // "Allow apps to find accounts" preference is already enabled.
+    private void updateExistingAccountVisibilityForChrome(Account account) {
+        if (SDK_INT < 26 || !isAuthVisible(this)) return;
+        setAccountVisibilitySafely(account, PACKAGE_NAME_KEY_LEGACY_NOT_VISIBLE, "legacy");
+        setAccountVisibilitySafely(account, CHROME_PACKAGE_NAME, "Chrome");
+    }
+
+    private void setAccountVisibilitySafely(Account account, String packageName, String target) {
+        try {
+            boolean applied = accountManager.setAccountVisibility(
+                    account, packageName, VISIBILITY_USER_MANAGED_VISIBLE);
+            if (!applied) {
+                Log.w(TAG, "Account visibility not applied to " + target);
+            }
+        } catch (RuntimeException error) {
+            // Vendor AccountManager behavior must not interrupt successful login.
+            // Do not log account names, tokens, or exception messages.
+            Log.w(TAG, "Account visibility unavailable for " + target
+                    + " (" + error.getClass().getSimpleName() + ")");
+        }
+    }
+
     private void saveAccount(Account account, AuthResponse response) {
         if (accountManager.addAccountExplicitly(account, response.token, null)) {
             accountManager.setAuthToken(account, "SID", response.Sid);
@@ -438,9 +462,8 @@ public class LoginActivity extends AssistantActivity {
                         String accountId = PeopleManager.loadUserInfo(LoginActivity.this, account);
                         if (!TextUtils.isEmpty(accountId))
                             accountManager.setUserData(account, "GoogleUserId", accountId);
-                        if (isAuthVisible(LoginActivity.this) && SDK_INT >= 26) {
-                            accountManager.setAccountVisibility(account, PACKAGE_NAME_KEY_LEGACY_NOT_VISIBLE, VISIBILITY_USER_MANAGED_VISIBLE);
-                        }
+                        // Apply account visibility after a successful login as well.
+                        updateExistingAccountVisibilityForChrome(account);
                         checkin(true);
                         returnSuccessResponse(account);
                         notifyGcmGroupUpdate(account.name);
