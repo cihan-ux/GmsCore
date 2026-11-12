@@ -73,8 +73,9 @@ class AccountsFragment : PreferenceFragmentCompat() {
                 )
 
                 // Modern Chrome targets Android O+ and may not consult the legacy key.
-                // Only update its explicit account visibility when the user changes the
-                // existing "Allow apps to find accounts" setting; do not grant all apps access.
+                // Update Chrome's explicit account visibility only with account
+                // discovery enabled, including when this settings screen is first opened.
+                // Do not grant every installed application account visibility.
                 setVisibilitySafely(
                     manager,
                     account,
@@ -148,6 +149,15 @@ class AccountsFragment : PreferenceFragmentCompat() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         addPreferencesFromResource(R.xml.preferences_accounts)
         updateSettings()
+
+        // The user may already have enabled account discovery before this version
+        // of microG was installed. Reconcile existing-account visibility on entry
+        // without requiring an off/on toggle or removing the Google account.
+        // Only run when the user has explicitly enabled the existing preference.
+        if (findPreference<TwoStatePreference>(Auth.VISIBLE)?.isChecked == true) {
+            updateExistingAccountVisibility(true)
+        }
+
         for (setting in TWO_STATE_SETTINGS) {
             findPreference<TwoStatePreference>(setting)?.setOnPreferenceChangeListener { preference, newValue ->
                 if (newValue is Boolean && preference.key in TWO_STATE_SETTINGS) {
