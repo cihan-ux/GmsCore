@@ -125,3 +125,51 @@ No root, account removal, reinstalling microG or replacing Chrome is needed.
 CI uses synthetic fixtures to verify privacy redaction.
 Android source: AccountManagerService dumpUser():
 https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/accounts/AccountManagerService.java
+
+
+## 2026-11-13: Samsung Galaxy A7 versus Huawei AQM-LX1
+
+New user evidence:
+- Samsung Galaxy A7 (2018), LineageOS 18.1 / Android 11, with microG
+  installed as an APK: **Google sign-in works inside Chrome**.
+- Huawei P Smart S AQM-LX1, EMUI 12 / Android API 29, microG
+  0.3.17.252432-hw, Chrome 157.0.8103.50: Google account exists and is
+  visible to the Account Probe, **but Chrome does not show a sign-in picker**.
+- Installation by APK alone is not the relevant distinction: Android framework
+  account visibility, GMS implementation, Chrome versions, and effective
+  signature spoofing may all differ between these ROMs.
+
+According to the [official microG signature spoofing documentation](https://github.com/microg/GmsCore/wiki/Signature-Spoofing),
+LineageOS builds from 2024-02-26 support **microG-specific** spoofing.
+Do **not** assume this older LineageOS 18.1 build includes it without
+confirmation. The older microG 0.3.17 Self-Check cannot reliably establish
+all newer signature-spoofing requirements. Chrome sign-in working on Samsung
+does **not** independently prove spoofing is present or identify the Huawei
+root cause.
+
+### New read-only Account Probe v0.4
+
+The same standalone APK can run on both Android 10 and Android 11. It reports:
+- Manufacturer/model, Android release/API and build type (not a unique device ID).
+- microG, Chrome, Play Store and optional Google Services Framework package versions.
+- Android Google authenticator package and Google account count **visible only to
+  the independent probe**, with the optional GET_ACCOUNTS grant.
+- Chrome's requested and granted GET_ACCOUNTS-related permissions.
+- **Public APK signing-certificate fingerprints** for microG, Chrome, and
+  Play/Companion (no passwords, account names or tokens).
+- Whether the optional legacy `FAKE_PACKAGE_SIGNATURE` permission name is
+  defined/granted. This is **only a weak clue**: its absence does not rule out
+  ROM-level signature spoofing; its presence does not prove functional spoofing.
+- Which installed packages claim HTTPS links, not which account Chrome uses.
+
+Safest experiment: install the standalone probe on the working A7 and report
+only its on-screen output; compare with the known Huawei v0.3/v0.5 observations.
+Do not modify microG/Chrome or remove any account. If the APK update fails
+because separate CI runs generated different debug signing keys, uninstall
+**only the independent probe app** `dev.cihan.microg.accountprobe`, never
+`com.google.android.gms`.
+
+A stronger comparison would use a modern microG Self-Check on a sacrificial
+environment; **do not install another microG version over the working A7
+or Huawei just to run it**. Chrome's private account picker and OAuth calls
+cannot be inspected by this independent APK.
