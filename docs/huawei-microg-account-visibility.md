@@ -267,3 +267,63 @@ Do not install experimental CI-signed microG over the user's existing
 official microG signature; do not remove the existing microG account or
 clear Chrome data for this test.
 
+## 2026-11-13: Huawei AQM-LX1 v0.5 Chrome-signature observations
+
+The user ran a separate, unpatched, **read-only** diagnostic:
+`dev.cihan.fakegapps.diagnostics` v0.5 on Android API 29.
+The following are **certificate** SHA-256 fingerprints, not APK byte hashes.
+
+| Package | SHA-256 signing certificate |
+| --- | --- |
+| microG GMS `com.google.android.gms` | `9bd06727e62796c0130eb6dab39b73157451582cbd138e86c468acc395d14165` |
+| Companion/Store `com.android.vending` | `9bd06727e62796c0130eb6dab39b73157451582cbd138e86c468acc395d14165` |
+| Chrome `com.android.chrome` | `f0fd6c5b410f25cb25c3b53346c8972fae30f8ee7411df910480ad6b2d60db83` |
+
+For **each** package, `GET_SIGNATURES`, `GET_SIGNING_CERTIFICATES`
+and APK-archive certificate agreed.
+
+- `PackageManager.checkSignatures(GMS, Play)` → `MATCH (0)`.
+- `PackageManager.checkSignatures(GMS, Chrome)` → `NO_MATCH (-3)`.
+- `PackageManager.checkSignatures(Play, Chrome)` → `NO_MATCH (-3)`.
+- `hasSigningCertificate(Play, Play cert)` → true.
+- `hasSigningCertificate(GMS, Play cert)` → true.
+- `hasSigningCertificate(Chrome, Chrome cert)` → true.
+- `hasSigningCertificate(GMS, Chrome cert)` → false.
+- `hasSigningCertificate(Play, Chrome cert)` → false.
+
+The Chrome SHA-256 matches the publicly listed **Google Chrome/Google Inc**
+signing certificate; e.g. APKMirror's Chrome 157.0.8103.14 listing:
+https://www.apkmirror.com/apk/google-inc/chrome/google-chrome-157-0-8103-14-release/
+The microG GMS and Companion fingerprint is the legitimate official microG
+certificate as previously recorded. Thus *no unexpected APK signing anomaly
+was detected in these three applications*.
+
+### Correct interpretation and next tests
+
+**Do NOT infer that Chrome and Play Services must have the same app signing
+certificate.** `checkSignatures(GMS, Chrome) = NO_MATCH` is a direct APK
+signing-identity comparison, **not a signature-spoofing test** and **not a
+diagnosis of why Chrome sign-in is unavailable**.
+
+Framework signature spoofing is a distinct capability: it can cause callers
+to see Google's expected GMS package identity without re-signing Chrome or
+microG. Nothing in v0.5 confirms or excludes every possible spoofing path.
+
+Official microG signature-spoofing documentation:
+https://github.com/microg/GmsCore/wiki/Signature-Spoofing
+It cautions that **only microG Services v0.3.36+** can accurately assess
+modern spoofing in its Self-Check. This user's installed `0.3.17.252432-hw`
+predates that version. Older Self-Check results may be collected as a clue,
+but must be marked **not definitive**.
+
+Android `AccountManager` docs:
+https://developer.android.com/reference/android/accounts/AccountManager
+For clients targeting API 26+, `GET_ACCOUNTS` grant alone does not determine
+per-app account visibility. The independent Account Probe seeing an account
+only proves it is visible to the probe, not to Chrome.
+
+Follow-up work: investigate Chrome-specific account visibility *inside the
+authenticator with proper signing privileges*, distinguish Chrome account
+picker from OAuth/token path, and test a signing-compatible microG prototype
+on a disposable environment. Do not change account visibility forcibly,
+replace the running microG with a CI debug APK, or attempt to re-sign Chrome.
