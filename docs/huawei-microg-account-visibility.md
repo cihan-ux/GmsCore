@@ -372,3 +372,52 @@ Interpret any differences in Chrome version, GSF presence, ROM feature
 or sign-in history as hypotheses, not proof of mechanism. If the two-device
 test is inconclusive, compare microG Self-Check screenshots and
 version-specific logs with personal identifiers redacted.
+
+## 2026-11-13: Chrome sign-in failure vs Android account enumeration
+
+Source-level review of **Android 10** `AccountManagerService`:
+https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android10-mainline-release/services/core/java/com/android/server/accounts/AccountManagerService.java
+
+- Effective account visibility is resolved per app. An explicit app override is
+  checked first; when absent, the OS may use the Android legacy visible/not
+  visible defaults depending on caller identity/permissions/target version.
+- The Android 10 `dumpsys account` dump prints a per-user **Accounts** listing
+  (with type) and a later account-name-associated **Account visibility** section
+  containing *stored* overrides. It does **not** directly print the outcome of
+  `resolveAccountVisibility` for Chrome.
+- An independent Android 10 package with `GET_ACCOUNTS` granted seeing one
+  `com.google` account does **not** prove Chrome sees it. The differing
+  per-package rules must be considered. However, it also means the general
+  account-registration path is functioning.
+- As of 2026-11-13, upstream microG issue #3379 remains open; the reporter has
+  a similar Chrome/account mismatch on LineageOS, so a Huawei-only framework
+  limitation is not sufficient to explain every instance.
+  https://github.com/microg/GmsCore/issues/3379
+- Historical upstream microG issue #1456 reported Chrome failing sign-in with
+  existing accounts even with the platform self-check reportedly successful.
+  https://github.com/microg/GmsCore/issues/1456
+- Chromium's own sign-in UI can hide the account picker when it thinks no
+  eligible accounts exist. This is separate from Android's bare stored
+  account visibility. Reference (historical Chromium source):
+  https://chromium.googlesource.com/chromium/src/+/3b8787c9098d1fefd19591d7c85a89ff7cec519d/chrome/browser/ui/android/signin/java/src/org/chromium/chrome/browser/ui/signin/SyncConsentFragmentBase.java
+
+### What changed in the diagnostic
+
+The read-only ADB script now first examines only `type=com.google` entries
+listed in the **same Android user**, matches their names internally to saved
+visibility rows, and prints *only numeric summaries*. Ambiguous/malformed
+mappings are intentionally discarded. Never upload raw account dumps: they
+may include account names, session data and debug history.
+
+**Do not interpret a missing Chrome override as a confirmed failure**:
+Android uses fallback rules. Conversely an explicit visible entry alone
+does not show that Chrome's IdentityManager or Google Play Services integration
+is functional.
+
+### Release gate
+
+Do not install CI-signed modified `com.google.android.gms` over the existing
+official-microG-signed Huawei installation; it cannot be treated as a
+signature-compatible Android update. Do not uninstall microG or remove
+accounts to test. The PR remains a source-only hypothesis until an isolated
+device with compatible microG signing and Chrome account-flow testing exists.
