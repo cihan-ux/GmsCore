@@ -9,6 +9,8 @@ import android.accounts.Account
 import android.accounts.AccountManager
 import android.content.Intent
 import android.graphics.Bitmap
+import android.os.Build
+import android.util.Log
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Menu
@@ -47,6 +49,78 @@ val TWO_STATE_SETTINGS = listOf(
 
 class AccountsFragment : PreferenceFragmentCompat() {
 
+    // Android 8+ retains per-account visibility independently from the microG preference.
+    // Accounts created before the setting was enabled need their visibility updated here.
+    private fun updateExistingAccountVisibility(visible: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+        val manager = AccountManager.get(requireContext())
+        val visibility = if (visible) {
+            AccountManager.VISIBILITY_USER_MANAGED_VISIBLE
+        } else {
+            AccountManager.VISIBILITY_UNDEFINED
+        }
+
+        try {
+            for (account in manager.getAccountsByType(AuthConstants.DEFAULT_ACCOUNT_TYPE)) {
+                // Existing pre-Android-O clients rely on the legacy visibility key.
+                setVisibilitySafely(
+                    manager,
+                    account,
+                    AccountManager.PACKAGE_NAME_KEY_LEGACY_NOT_VISIBLE,
+                    visibility,
+                    "legacy clients",
+                )
+
+                // Modern Chrome targets Android O+ and may not consult the legacy key.
+                // Update Chrome's explicit account visibility only with account
+                // discovery enabled, including when this settings screen is first opened.
+                // Do not grant every installed application account visibility.
+                setVisibilitySafely(
+                    manager,
+                    account,
+                    CHROME_PACKAGE_NAME,
+                    visibility,
+                    "Chrome",
+                )
+            }
+        } catch (e: RuntimeException) {
+            // A vendor-modified AccountManager must not crash the settings screen.
+            Log.w(TAG, "Unable to enumerate Google accounts for visibility update (${e.javaClass.simpleName})")
+        }
+    }
+
+    private fun setVisibilitySafely(
+        manager: AccountManager,
+        account: Account,
+        packageName: String,
+        visibility: Int,
+        target: String,
+    ) {
+        // Write first: some vendor AccountManager implementations can reject readback,
+        // even if their visibility setter works. Readback is diagnostic, not a gate.
+        val updated = try {
+            manager.setAccountVisibility(account, packageName, visibility)
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Could not write visibility for $target (${e.javaClass.simpleName})")
+            return
+        }
+        if (!updated) {
+            Log.w(TAG, "Android refused account visibility update for $target")
+            return
+        }
+        try {
+            val after = manager.getAccountVisibility(account, packageName)
+            // Do not log the account name, email, or auth tokens.
+            Log.i(TAG, "$target visibility: requested=$visibility after=$after applied=true")
+            if (visibility != AccountManager.VISIBILITY_UNDEFINED && after != visibility) {
+                Log.w(TAG, "Google account visibility readback does not match for $target")
+            }
+        } catch (e: RuntimeException) {
+            Log.i(TAG, "Visibility write accepted for $target; readback unavailable (${e.javaClass.simpleName})")
+        }
+    }
+
     // TODO: This should use some better means of accessing the database
     private fun getDisplayName(account: Account): String? {
         val databaseHelper = DatabaseHelper(context)
@@ -75,11 +149,21 @@ class AccountsFragment : PreferenceFragmentCompat() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         addPreferencesFromResource(R.xml.preferences_accounts)
         updateSettings()
+
+        // The user may already have enabled account discovery before this version
+        // of microG was installed. Reconcile existing-account visibility on entry
+        // without requiring an off/on toggle or removing the Google account.
+        // Only run when the user has explicitly enabled the existing preference.
+        if (findPreference<TwoStatePreference>(Auth.VISIBLE)?.isChecked == true) {
+            updateExistingAccountVisibility(true)
+        }
+
         for (setting in TWO_STATE_SETTINGS) {
             findPreference<TwoStatePreference>(setting)?.setOnPreferenceChangeListener { preference, newValue ->
                 if (newValue is Boolean && preference.key in TWO_STATE_SETTINGS) {
                     SettingsContract.setSettings(requireContext(), Auth.getContentUri(requireContext())) { put(preference.key, newValue) }
                     updateSettings()
+                    if (preference.key == Auth.VISIBLE) updateExistingAccountVisibility(newValue)
                     if (preference.key == Auth.TWO_STEP_VERIFICATION && newValue) registerGcmInGms()
                     if (preference.key == Auth.FIND_DEVICES && newValue) registerGcmInGms()
                     true
@@ -163,6 +247,8 @@ class AccountsFragment : PreferenceFragmentCompat() {
     }
 
     companion object {
+        private const val TAG = "GmsAccountSettings"
+        private const val CHROME_PACKAGE_NAME = "com.android.chrome"
         private const val MENU_GAMES_MANAGED = Menu.FIRST
         private const val MENU_PASSKEY_MANAGER = Menu.FIRST + 1
     }

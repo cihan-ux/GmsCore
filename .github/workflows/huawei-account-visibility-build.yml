@@ -1,0 +1,66 @@
+name: "microG Huawei account visibility - experimental"
+on:
+  push:
+    branches:
+      - experiment/huawei-account-visibility-v1
+    paths:
+      - "play-services-core/src/main/kotlin/org/microg/gms/ui/AccountsFragment.kt"
+      - "play-services-core/src/main/java/org/microg/gms/auth/login/LoginActivity.java"
+      - ".github/workflows/huawei-account-visibility-build.yml"
+      - "docs/huawei-microg-account-visibility.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-huawei-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GRADLE_MICROG_VERSION_WITHOUT_GIT: 1
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Compile Huawei (Mapbox) debug variant
+        run: ./gradlew :play-services-core:assembleMapboxHuaweiDebug --stacktrace
+      - name: Verify Huawei package identity, signing and checksums
+        run: |
+          set -euo pipefail
+          DIR="play-services-core/build/outputs/apk/mapboxHuawei/debug"
+          mapfile -t apks < <(find "$DIR" -maxdepth 1 -type f -name '*.apk' | sort)
+          test "${#apks[@]}" -eq 1
+          APK="${apks[0]}"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)
+          AAPT=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -n 1)
+          test -x "$APKSIGNER" && test -x "$AAPT"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          "$AAPT" dump badging "$APK" | grep -m 1 "^package: name='com.google.android.gms'"
+          (cd "$DIR" && sha256sum "$(basename "$APK")" > SHA256SUMS.txt)
+          printf '%s\n' \
+            'EXPERIMENTAL microG CI BUILD - DO NOT INSTALL ON PRIMARY HUAWEI' \
+            'This APK has a CI signing key, which may not match installed microG.' \
+            'Do not remove existing microG, Google accounts, or device registrations.' \
+            'Build and signature verification do NOT demonstrate Chrome sign-in.' \
+            > "$DIR/DO-NOT-INSTALL-ON-PRIMARY-PHONE.txt"
+      - name: Upload verified experimental debug build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: microg-huawei-account-visibility-debug
+          path: |
+            play-services-core/build/outputs/apk/mapboxHuawei/debug/*.apk
+            play-services-core/build/outputs/apk/mapboxHuawei/debug/SHA256SUMS.txt
+            play-services-core/build/outputs/apk/mapboxHuawei/debug/DO-NOT-INSTALL-ON-PRIMARY-PHONE.txt
+          if-no-files-found: error
+          retention-days: 7

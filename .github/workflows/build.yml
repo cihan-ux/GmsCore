@@ -62,3 +62,73 @@ jobs:
         run: "./gradlew assemble${{ matrix.target }}"
       - name: "Execute Gradle lint"
         run: "./gradlew lint${{ matrix.target }}"
+
+      - name: "Collect experimental Huawei APK"
+        if: matrix.target == 'Debug'
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import re
+          import shutil
+          import subprocess
+
+          output_root = Path("play-services-core/build/outputs/apk")
+          artifact_root = Path("huawei-debug-artifact")
+          artifact_root.mkdir(exist_ok=True)
+          collected = []
+          for metadata in output_root.rglob("output-metadata.json"):
+              data = json.loads(metadata.read_text(encoding="utf-8"))
+              if data.get("variantName") != "mapboxHuaweiDebug":
+                  continue
+              if data.get("applicationId") != "com.google.android.gms":
+                  raise SystemExit("Unexpected package ID in Huawei build metadata; refusing to publish")
+              for element in data.get("elements", []):
+                  filename = element.get("outputFile")
+                  if not filename:
+                      continue
+                  apk = metadata.parent / filename
+                  if not apk.is_file():
+                      raise SystemExit("Huawei output metadata refers to missing APK: " + filename)
+                  destination = artifact_root / apk.name
+                  shutil.copy2(apk, destination)
+                  digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+                  cert_result = subprocess.run(
+                      ["keytool", "-printcert", "-jarfile", str(destination)],
+                      capture_output=True, text=True, check=True
+                  )
+                  cert_match = re.search(r"SHA256:\s*([0-9A-Fa-f:]+)", cert_result.stdout)
+                  if not cert_match:
+                      raise SystemExit("APK signer SHA-256 not found; refusing to publish")
+                  signer_sha256 = cert_match.group(1).replace(":", "").lower()
+                  collected.append({
+                      "file": destination.name,
+                      "sha256": digest,
+                      "signerCertificateSha256": signer_sha256,
+                      "variant": data["variantName"],
+                      "applicationId": data["applicationId"],
+                      "versionName": data.get("versionName"),
+                  })
+          if not collected:
+              raise SystemExit("No mapboxHuaweiDebug APK was found; refusing to publish a different flavor")
+          (artifact_root / "build-manifest.json").write_text(
+              json.dumps(collected, indent=2), encoding="utf-8"
+          )
+          (artifact_root / "DO-NOT-INSTALL-ON-PRIMARY-PHONE.txt").write_text(
+              "EXPERIMENTAL BUILD - NOT TESTED ON HUAWEI AQM-LX1.\n"
+              "Not signed with your existing microG signing key.\n"
+              "Do not uninstall your working microG installation to try this build.\n"
+              "This does not enable EMUI signature spoofing or guarantee Chrome login.\n",
+              encoding="utf-8",
+          )
+          print("Verified Huawei debug outputs:", json.dumps(collected, indent=2))
+          PY
+      - name: "Upload experimental Huawei APK"
+        if: matrix.target == 'Debug'
+        uses: actions/upload-artifact@v4
+        with:
+          name: microg-huawei-account-visibility-mapbox-debug
+          path: huawei-debug-artifact/*
+          if-no-files-found: error
+          retention-days: 7
