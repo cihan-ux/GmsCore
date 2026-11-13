@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Read-only Android 10 account-visibility audit; NO personal-data output.
+"""Privacy-preserving, read-only Android AccountManager visibility audit.
 
-Requires a local, USB-connected ADB-enabled Android phone. ADB's raw
-'dumpsys account' output may include identifying account names or metadata.
-It is read in memory only, never saved, printed or transmitted.
+This script invokes only 'adb shell dumpsys account' and processes its output
+in memory. Raw output may contain account names, e-mail addresses, or session
+history and MUST NOT be shared. Only aggregated results are printed.
 
-This counts only stored Android visibility entries for Chrome and legacy
-defaults across all account types. It is NOT effective Chrome account
-visibility, a Google-specific result, OAuth, or signature-spoofing evidence.
+AOSP Android 10 provides the account type in the 'Accounts:' listing and later
+groups stored visibility rules by account name. We link only *unambiguous*
+Google account labels within the same Android user, then count whitelisted
+stored visibility codes. The result is NOT Chrome's effective account access,
+OAuth, or signature-spoofing evidence. EMUI may change the dump format.
 """
 
 from __future__ import annotations
 
 import argparse
-from collections import Counter
+from collections import Counter, defaultdict
+from dataclasses import dataclass
 import re
 import subprocess
 import sys
@@ -23,7 +26,9 @@ PACKAGE_NAMES = {
     "android:accounts:key_legacy_not_visible": "Legacy not-visible default",
     "android:accounts:key_legacy_visible": "Legacy visible default",
 }
-ENTRY = re.compile(r"^(" + "|".join(re.escape(p) for p in PACKAGE_NAMES) + r"),\s*([0-4])$")
+ACCOUNT_LINE = re.compile(r"^Account \{name=(.*), type=([^}]+)\}$")
+ENTRY = re.compile(r"^(\S+),\s*([0-4])$")
+ANY_ENTRY = re.compile(r"^\S+,\s*\d+$")
 VISIBILITY = {
     0: "UNDEFINED",
     1: "VISIBLE",
@@ -33,25 +38,89 @@ VISIBILITY = {
 }
 
 
-def summarize(raw: str) -> tuple[int, dict[str, Counter[int]]]:
+@dataclass
+class Audit:
+    sections: int
+    google_accounts_listed: int
+    matched_google_labels: int
+    ambiguous_labels: int
+    counts: dict[str, Counter[int]]
+
+
+def _is_user_heading(line: str) -> bool:
+    return line.startswith("User ") and line.endswith(":")
+
+
+def summarize(raw: str) -> Audit:
+    # First pass: map account names to account types, separately per Android
+    # user. Names are used in-memory only and never included in the report.
+    known: dict[int, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    user = 0
+    in_accounts = False
+    for raw_line in raw.splitlines():
+        line = raw_line.strip()
+        if _is_user_heading(line):
+            user += 1
+            in_accounts = False
+            continue
+        if line.startswith("Accounts: "):
+            in_accounts = True
+            continue
+        if in_accounts:
+            matched = ACCOUNT_LINE.fullmatch(line)
+            if matched:
+                known[user][matched.group(1)].add(matched.group(2))
+            else:
+                in_accounts = False
+
+    # Second pass: match visibility records only after an account-name line
+    # that unambiguously belongs to Google within this user.
+    codes = {pkg: Counter() for pkg in PACKAGE_NAMES}
+    google_labels = set()
+    ambiguous = set()
     sections = 0
-    inside = False
-    found = {pkg: Counter() for pkg in PACKAGE_NAMES}
-    for line in raw.splitlines():
-        line = line.strip()
+    user = 0
+    in_visibility = False
+    current_account = None
+    for raw_line in raw.splitlines():
+        line = raw_line.strip()
+        if _is_user_heading(line):
+            user += 1
+            in_visibility = False
+            current_account = None
+            continue
         if line == "Account visibility:":
             sections += 1
-            inside = True
+            in_visibility = True
+            current_account = None
             continue
-        if line.startswith("User ") and line.endswith(":"):
-            inside = False
+        if not in_visibility:
             continue
-        if not inside:
+        types = known[user].get(line)
+        if types:
+            current_account = (user, line) if types == {"com.google"} else None
+            if current_account is not None:
+                google_labels.add(current_account)
+            if "com.google" in types and len(types) != 1:
+                ambiguous.add((user, line))
             continue
         match = ENTRY.fullmatch(line)
         if match:
-            found[match.group(1)][int(match.group(2))] += 1
-    return sections, found
+            pkg, value = match.group(1), int(match.group(2))
+            if current_account is not None and pkg in codes:
+                codes[pkg][value] += 1
+            continue
+        # An unrelated visibility entry is not an account-name boundary.
+        if ANY_ENTRY.fullmatch(line):
+            continue
+        # Unknown or unparseable account label: do not misattribute entries.
+        current_account = None
+
+    listed = sum(
+        1 for user_map in known.values()
+        for types in user_map.values() if "com.google" in types
+    )
+    return Audit(sections, listed, len(google_labels), len(ambiguous), codes)
 
 
 def read_from_adb() -> str:
@@ -61,50 +130,63 @@ def read_from_adb() -> str:
             capture_output=True, text=True, timeout=30, check=False,
         )
     except FileNotFoundError:
-        raise RuntimeError("ADB bulunamadı. Bilgisayara Android platform-tools kurulmalı.") from None
+        raise RuntimeError("ADB bulunamadı; Android platform-tools gerekli.") from None
     except subprocess.TimeoutExpired:
-        raise RuntimeError("ADB hesap sorgusu zaman aşımına uğradı.") from None
+        raise RuntimeError("ADB sorgusu zaman aşımına uğradı.") from None
     if p.returncode:
-        # Never print vendor stderr, which can contain account identifiers.
-        raise RuntimeError("ADB sorgusu başarısız; USB bağlantısını kontrol et.")
+        # Vendor stderr can contain identifying information; never print it.
+        raise RuntimeError("ADB sorgusu başarısız; USB hata ayıklamayı kontrol et.")
     return p.stdout
 
 
 def report(raw: str) -> str:
-    sections, found = summarize(raw)
+    audit = summarize(raw)
     out = [
-        "Chrome hesap görünürlüğü — YALNIZCA OKUMA",
-        "E-posta adresleri, hesap adları ve tokenlar gösterilmez.",
+        "Chrome / Google hesabı görünürlük kaydı — YALNIZCA OKUMA",
+        "Hesap adları, e-posta adresleri ve tokenlar gösterilmez.",
     ]
-    if sections == 0:
+    if audit.sections == 0:
         out += [
             "SONUÇ: BELİRSİZ — Account visibility bölümü okunamadı.",
-            "EMUI farklı bir dumpsys biçimi kullanıyor veya cihaz kilitli olabilir.",
+            "Cihaz kilitli olabilir veya EMUI farklı bir dumpsys biçimi kullanıyor.",
         ]
         return "\n".join(out)
-    out.append("Görünürlük bölümü sayısı: " + str(sections))
+
+    out.append("Görünürlük bölümü sayısı: " + str(audit.sections))
+    out.append("Listede Google olarak tanınan hesap sayısı: " +
+               str(audit.google_accounts_listed))
+    out.append("Görünürlük bloğuyla eşleşen Google hesap sayısı: " +
+               str(audit.matched_google_labels))
+    if audit.ambiguous_labels:
+        out.append("Birden fazla hesap türüne ait isim: " +
+                   str(audit.ambiguous_labels) + " (kayıtlar hariç tutuldu)")
+
+    if audit.google_accounts_listed == 0 or audit.matched_google_labels == 0:
+        out.append("SONUÇ: BELİRSİZ — Google hesabına ait kaydedilmiş "
+                   "görünürlük satırı güvenle eşleştirilemedi.")
     for package, description in PACKAGE_NAMES.items():
-        codes = found[package]
-        if not codes:
-            out.append(description + ": KAYIT BULUNAMADI (varsayılan erişim yine mümkün)")
-            continue
-        safe_codes = ", ".join(
-            str(value) + " (" + VISIBILITY[value] + ") x" + str(count)
-            for value, count in sorted(codes.items())
-        )
-        out.append(description + ": " + safe_codes)
+        counts = audit.counts[package]
+        if not counts:
+            out.append(description + ": GOOGLE HESABINA AİT AÇIK KAYIT YOK "
+                       "(varsayılan erişim yine mümkün)")
+        else:
+            values = ", ".join(
+                str(value) + " (" + VISIBILITY[value] + ") x" + str(n)
+                for value, n in sorted(counts.items())
+            )
+            out.append(description + ": " + values)
     out += [
-        "NOT: Bunlar TÜM hesap türleri için saklanan kurallardır.",
-        "Google hesabına ait oldukları veya Chrome'un onu gördüğü kanıtlanmaz.",
-        "Kayıt bulunmaması erişim olmadığı anlamına GELMEZ.",
-        "Chrome oturum açma, OAuth ve imza taklidi bu yöntemle ölçülmez.",
+        "NOT: Bunlar Google hesabıyla eşleştirilen SAKLANMIŞ kurallardır.",
+        "Kayıt olmaması Chrome'un hesabı göremediğini kanıtlamaz.",
+        "Etkin hesap erişimi, Chrome oturum açma ve OAuth burada ölçülmez.",
+        "Ham adb shell dumpsys account çıktısını ASLA paylaşma.",
     ]
     return "\n".join(out)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stdin", action="store_true", help="Use stdin for offline test")
+    parser.add_argument("--stdin", action="store_true", help="Read offline test data")
     args = parser.parse_args()
     try:
         raw = sys.stdin.read() if args.stdin else read_from_adb()
