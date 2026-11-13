@@ -173,3 +173,31 @@ A stronger comparison would use a modern microG Self-Check on a sacrificial
 environment; **do not install another microG version over the working A7
 or Huawei just to run it**. Chrome's private account picker and OAuth calls
 cannot be inspected by this independent APK.
+
+
+## 2026-11-13: Safer Google-account-only ADB audit
+
+The first ADB script counted stored account visibility entries across **all**
+Android account types. AOSP Android 10 explicitly prints the per-user
+`Accounts:` listing with account type, then groups visibility entries by
+account name in the `Account visibility:` section. Using the real AOSP format,
+the script now matches only unambiguous `type=com.google` account names
+*within the same Android user*; other account types, duplicate identities
+across types, and unknown record formats are conservatively excluded.
+
+Only aggregated counts and numeric visibility codes are printed. The
+underlying `dumpsys account` output is still sensitive; use the script
+locally, not by uploading or pasting raw Android output. Synthetic regression
+tests cover wrong account types, multiple users, ambiguous identities,
+unknown labels, no stored Chrome entry and redaction of email/token-like data.
+
+**Important technical limit:** AOSP's printed visibility rows are *stored
+overrides*. Even a Google-specific stored `com.android.chrome` row is **not**
+an API-level test of Chrome's effective account access or token request.
+A missing row does not prove that Chrome's access is denied. The script
+cannot infer OAuth, Sync, a genuine Chrome sign-in flow, or system signature
+spoofing. EMUI can output a different format; in that case the parser must
+report an inconclusive result rather than inventing a Google association.
+
+Android 10 reference source:
+https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android10-mainline-release/services/core/java/com/android/server/accounts/AccountManagerService.java
