@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+      - name: Verify read-only ADB audit redaction (no device needed)
+        run: python3 -m unittest discover -s experiments/huawei-account-probe/scripts -p 'test_*.py' -v
       - name: Install Java
         uses: actions/setup-java@v4
         with:
