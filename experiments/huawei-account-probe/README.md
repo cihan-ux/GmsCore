@@ -84,3 +84,44 @@ To update: install the v0.3 `app-debug.apk` from the matching successful CI
 artifact. If Android refuses an in-place update due to a different CI signing
 key, remove **only** `dev.cihan.microg.accountprobe` (not microG or Chrome)
 and install v0.3. Do not clear Google/Chrome/microG data.
+
+
+## 2026-11-13: Read-only USB/ADB visibility audit (no APK needed)
+
+Chrome does not present the existing account on Huawei AQM-LX1 even though
+microG's "Allow apps to find accounts" is enabled. Account Probe v0.3
+sees one Google account to itself. Signature diagnostics v0.5 confirmed
+expected distinct legitimate microG and Chrome signing identities, but this
+does not prove why Chrome's account chooser is unavailable.
+
+Upstream report from a *different* device and ROM:
+https://github.com/microg/GmsCore/issues/3379 (opened 2026-04-07).
+Missing EMUI signature spoofing is not proven to be the sole cause.
+
+### Optional follow-up from an ADB-enabled computer
+
+Script: [scripts/chrome_visibility_dumpsys.py](scripts/chrome_visibility_dumpsys.py)
+
+1. On a Linux/Windows computer, install adb and Python 3. Connect
+   the Huawei by USB and authorize USB debugging. Confirm that the
+   command **adb devices** shows **device**.
+2. Download and inspect the plain-text Python script above.
+3. Run **python3 chrome_visibility_dumpsys.py** from its download folder.
+   The script executes **adb shell dumpsys account** in READ-ONLY mode,
+   processes the response in memory, prints only counts and numeric
+   visibility codes. No data is saved or uploaded.
+4. Share only the script's ALREADY REDACTED SUMMARY.
+   NEVER upload raw dumpsys account output because it may include
+   personal account identifiers, e-mail addresses and session history.
+
+The script reports *stored* visibility keys for Chrome and Android legacy
+defaults across ALL account types. It CANNOT determine effective account
+visibility, which entries belong specifically to a Google account, or
+why Chrome's picker/sign-in fails. An absent entry is INCONCLUSIVE, not
+proof that Chrome cannot access the account. Some Huawei/EMUI builds may
+withhold this section.
+
+No root, account removal, reinstalling microG or replacing Chrome is needed.
+CI uses synthetic fixtures to verify privacy redaction.
+Android source: AccountManagerService dumpUser():
+https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/services/core/java/com/android/server/accounts/AccountManagerService.java
